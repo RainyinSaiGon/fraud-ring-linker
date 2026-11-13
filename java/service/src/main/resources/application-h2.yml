@@ -1,0 +1,7 @@
+# Local demo and fast tests: in-memory database, no Docker or PostgreSQL needed.
+# Data is lost when the process stops.
+spring:
+  datasource:
+    url: jdbc:h2:mem:fraudlinker;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""

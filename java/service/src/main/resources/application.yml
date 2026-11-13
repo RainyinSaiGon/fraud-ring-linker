@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: fraud-ring-linker
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/fraudlinker}
+    username: ${DATABASE_USERNAME:fraudlinker}
+    password: ${DATABASE_PASSWORD:}
+  flyway:
+    # {vendor} resolves to "postgresql" or "h2", so vendor-specific scripts run only where they apply.
+    locations: classpath:db/migration/common,classpath:db/migration/{vendor}
+  jackson:
+    # Same field names as the engine's JSONL input, e.g. account_id, payment_fingerprint.
+    property-naming-strategy: SNAKE_CASE
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+linker:
+  # Pairs scored per cluster explanation is maxExplainMembers squared / 2.
+  max-explain-members: 50
+  # Largest cluster returned in full by the API; bigger ones are cut and flagged.
+  max-cluster-members-returned: 500

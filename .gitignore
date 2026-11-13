@@ -1,4 +1,5 @@
 bin/
 clusters.json
 *.exe
+java/**/target/
 java/target/
