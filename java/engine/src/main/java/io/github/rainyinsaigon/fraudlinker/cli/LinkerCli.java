@@ -77,6 +77,7 @@ public final class LinkerCli {
             case "link" -> runLink(rest);
             case "stream" -> runStream(rest, stdin, stdout);
             case "cost" -> writeOut(stdout, CostCommand.run(parseFlags(rest, CostCommand.FLAGS)));
+            case "sweep" -> writeOut(stdout, SweepCommand.run(parseFlags(rest, SweepCommand.FLAGS)));
             case "help", "-h", "--help" -> printUsage(new PrintStream(stdout, true, StandardCharsets.UTF_8));
             default -> {
                 printUsage(stderr);
@@ -183,5 +184,7 @@ public final class LinkerCli {
         out.println("  linker stream --accounts <accounts.jsonl> --constraints <constraints.jsonl>");
         out.println("  linker cost --accounts <accounts.jsonl> --constraints <constraints.jsonl> --truth <truth.json>");
         out.println("              [--wrong-link-cost 50] [--missed-ring-cost 2000] [--format text|json] [--write-clusters DIR]");
+        out.println("  linker sweep --datasets <dir>[,<dir>...] [--merge-scores 0.55,...] [--stream-thresholds 0.70,...]");
+        out.println("               [--costs 50:2000,50:500,50:50] [--format text|json]");
     }
 }

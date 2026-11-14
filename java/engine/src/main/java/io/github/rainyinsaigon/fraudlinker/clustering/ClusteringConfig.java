@@ -12,4 +12,9 @@ public record ClusteringConfig(IndexConfig index, ScoringConfig scoring, double 
     public static ClusteringConfig defaults() {
         return new ClusteringConfig(IndexConfig.defaults(), ScoringConfig.defaults(), 0.82);
     }
+
+    /** The two thresholds a cost sweep varies, with everything else unchanged. */
+    public ClusteringConfig withThresholds(double minMergeScore, double newStreamThreshold) {
+        return new ClusteringConfig(index, scoring.withMinMergeScore(minMergeScore), newStreamThreshold);
+    }
 }
