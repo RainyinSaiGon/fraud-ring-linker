@@ -11,8 +11,10 @@ Two Maven modules:
 mvn verify      # build both modules and run every test
 ```
 
-The build is moving to Gradle (epic #17). Modules already migrated also build with
-`./gradlew build`; the engine's CLI jar is then at `engine/build/libs/fraud-ring-linker.jar`.
+The build is moving to Gradle (epic #17). Both modules also build with `./gradlew build`:
+the CLI jar is at `engine/build/libs/fraud-ring-linker.jar` and the service jar at
+`service/build/libs/fraud-ring-linker-service.jar`. Run the service without Docker with
+`./gradlew :service:bootRun --args='--spring.profiles.active=h2'`.
 
 PostgreSQL tests use Testcontainers and need Docker. Without Docker they are
 skipped, and everything else still runs. CI always runs them.
