@@ -31,9 +31,19 @@ public final class CostSweep {
      * @param batchSplit  multi-account actors split in batch mode
      * @param streamWrong wrongly linked accounts in stream mode
      * @param streamSplit multi-account actors split in stream mode
+     * @param proposalWrong wrongly linked accounts in stream mode with every merge proposal accepted
+     * @param proposalSplit multi-account actors split in stream mode with every merge proposal accepted
+     * @param proposals     merge proposals opened, which is the analyst's review workload
      */
     public record Point(double minMergeScore, double streamThreshold, long batchWrong, long batchSplit,
-                        long streamWrong, long streamSplit) {
+                        long streamWrong, long streamSplit, long proposalWrong, long proposalSplit,
+                        long proposals) {
+
+        /** A point with no proposal results, for tests that only look at batch and stream. */
+        public Point(double minMergeScore, double streamThreshold, long batchWrong, long batchSplit,
+                     long streamWrong, long streamSplit) {
+            this(minMergeScore, streamThreshold, batchWrong, batchSplit, streamWrong, streamSplit, 0, 0, 0);
+        }
 
         public long batchCost(CostModel costs) {
             return batchWrong * costs.wrongLinkCost() + batchSplit * costs.missedRingCost();
@@ -41,6 +51,10 @@ public final class CostSweep {
 
         public long streamCost(CostModel costs) {
             return streamWrong * costs.wrongLinkCost() + streamSplit * costs.missedRingCost();
+        }
+
+        public long proposalCost(CostModel costs) {
+            return proposalWrong * costs.wrongLinkCost() + proposalSplit * costs.missedRingCost();
         }
 
         boolean isAt(ClusteringConfig config) {
@@ -62,14 +76,21 @@ public final class CostSweep {
                 long batchSplit = 0;
                 long streamWrong = 0;
                 long streamSplit = 0;
+                long proposalWrong = 0;
+                long proposalSplit = 0;
+                long proposals = 0;
                 for (Dataset d : datasets) {
                     CostReport.Result r = CostReport.run(d.accounts(), d.constraints(), d.truth(), config, CostModel.DEFAULT);
                     batchWrong += r.batch().wronglyLinkedAccounts();
                     batchSplit += r.batch().splitMultiAccountActors();
                     streamWrong += r.stream().wronglyLinkedAccounts();
                     streamSplit += r.stream().splitMultiAccountActors();
+                    proposalWrong += r.streamWithProposals().wronglyLinkedAccounts();
+                    proposalSplit += r.streamWithProposals().splitMultiAccountActors();
+                    proposals += r.proposals();
                 }
-                points.add(new Point(merge, stream, batchWrong, batchSplit, streamWrong, streamSplit));
+                points.add(new Point(merge, stream, batchWrong, batchSplit, streamWrong, streamSplit,
+                        proposalWrong, proposalSplit, proposals));
             }
         }
         return points;

@@ -42,7 +42,7 @@ Sources:
 |---|---|---|
 | 3 | Quality gates: coverage and mutation testing in CI, manual test plan | in progress |
 | 4 | Traffic simulator (Node) and analyst page (React) | in progress |
-| 5 | Business cost report | in progress |
+| 5 | Business cost report | done |
 | 6 | Mule-network detection from transfers | planned |
 | 7 | Account-takeover signals at login | planned |
 | 8 | Login and data protection | planned |
@@ -138,6 +138,38 @@ What this means:
   at any setting, so this sweep cannot show the other side of the trade-off.
   Harder legitimate cases (shared family cards, shared office devices) would
   make it meaningful.
+
+**Merge proposals (#29):** when a new account links strongly to two clusters,
+the service now opens a proposal and an analyst accepts or rejects it. The cost
+report has a third mode, "stream + proposals", which accepts every proposal the
+moment it opens. That is the best case: an analyst who agrees with every
+proposal and answers at once. Same 10 seeds, today's setting (0.70, 0.82), $50
+per wrong link and $2,000 per missed ring:
+
+| Mode | Rings fully linked | Actors split | Wrongly linked | Proposals to review | Cost |
+|---|---|---|---|---|---|
+| Batch | 80 / 80 | 0 | 0 | none | $0 |
+| Stream | 68 / 80 | 12 | 0 | none | $24,000 |
+| Stream + proposals | 80 / 80 | 0 | 0 | 12 | $0 |
+
+- **Proposals close the whole gap on the simulator.** Each of the 12 splits
+  opened exactly one proposal, and accepting it recovered the ring. That is 12
+  reviews, $2,000 saved per review, and none wasted on a pair that should stay
+  apart.
+- **The stream threshold matters for proposals.** A proposal needs a link that
+  is strong enough to join, so at stream thresholds of 0.90 and 0.94 no
+  proposals open and the splits stay (47 and 55). This is one more reason to keep
+  the threshold at 0.82.
+- **On the take-home sample** (run locally only): stream $16,000, stream +
+  proposals $14,000, batch $12,000. One proposal recovers one of the two rings
+  that streaming splits. The other ring has a member whose only link to the rest
+  is a shared IP subnet. Batch links it with a subnet rule that needs the whole
+  sign-up cohort in hindsight, so in streaming it never joins anything and no
+  proposal can open. A nightly batch relink that sends its differences to the
+  review queue would cover that case.
+- **Still to test:** analysts don't accept everything, and they don't answer at
+  once. Until a proposal is accepted, ring members who arrive meanwhile can land
+  on either side. The best case here is an upper bound on the saving.
 
 ### Stage 6: mule-network detection
 

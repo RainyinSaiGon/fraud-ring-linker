@@ -140,6 +140,23 @@ final class SweepCommand {
             out.append('\n');
         }
 
+        out.append("\nStream with every merge proposal accepted: wrongly linked / split / proposals opened\n\n");
+        out.append(String.format(Locale.ROOT, "%-12s %-10s", "merge score", ""));
+        for (double s : streams) {
+            out.append(String.format(Locale.ROOT, "%-14s", label(s, s == current.streamThreshold())));
+        }
+        out.append('\n');
+        i = 0;
+        for (double m : merges) {
+            out.append(String.format(Locale.ROOT, "%-12s %-10s", label(m, m == current.scoring().minMergeScore()), ""));
+            for (int j = 0; j < streams.size(); j++) {
+                CostSweep.Point p = points.get(i++);
+                out.append(String.format(Locale.ROOT, "%-14s",
+                        p.proposalWrong() + " / " + p.proposalSplit() + " / " + p.proposals()));
+            }
+            out.append('\n');
+        }
+
         CostSweep.Point now = points.stream().filter(p -> p.minMergeScore() == current.scoring().minMergeScore()
                 && p.streamThreshold() == current.streamThreshold()).findFirst().orElseThrow();
         for (CostModel price : prices) {
@@ -152,6 +169,9 @@ final class SweepCommand {
                     stream.minMergeScore(), stream.streamThreshold(), stream.streamCost(price), now.streamCost(price)));
             out.append(String.format(Locale.ROOT, "  Batch:  cheapest is merge score %.2f: $%,d (current $%,d)%n",
                     batch.minMergeScore(), batch.batchCost(price), now.batchCost(price)));
+            out.append(String.format(Locale.ROOT,
+                    "  Stream with every proposal accepted, current setting: $%,d (%d proposals)%n",
+                    now.proposalCost(price), now.proposals()));
         }
         return out.toString();
     }
@@ -180,6 +200,9 @@ final class SweepCommand {
             row.put("batch_split_actors", p.batchSplit());
             row.put("stream_wrongly_linked", p.streamWrong());
             row.put("stream_split_actors", p.streamSplit());
+            row.put("proposals_wrongly_linked", p.proposalWrong());
+            row.put("proposals_split_actors", p.proposalSplit());
+            row.put("proposals_opened", p.proposals());
             grid.add(row);
         }
         body.put("points", grid);

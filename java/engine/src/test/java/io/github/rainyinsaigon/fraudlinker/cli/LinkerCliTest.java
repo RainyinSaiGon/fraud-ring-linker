@@ -143,8 +143,10 @@ class LinkerCliTest {
 
         assertThat(result.code()).as(result.stderr()).isZero();
         assertThat(result.stdout()).contains("$50 per wrongly linked account, $2,000 per missed ring")
-                .containsPattern("Fraud rings fully linked +1 / 1 +0 / 1")
-                .containsPattern("Cost +\\$0 +\\$2,000");
+                .containsPattern("stream \\+ proposals")
+                .containsPattern("Fraud rings fully linked +1 / 1 +0 / 1 +1 / 1")
+                .containsPattern("Cost +\\$0 +\\$2,000 +\\$0")
+                .contains("Merge proposals opened: 1 (1 merged when accepted)");
     }
 
     @Test
@@ -165,6 +167,11 @@ class LinkerCliTest {
         assertThat(report.at("/stream/split_fraud_rings").asInt()).isEqualTo(1);
         assertThat(MAPPER.readTree(out.resolve("batch-clusters.json").toFile()).get("clusters")).hasSize(1);
         assertThat(MAPPER.readTree(out.resolve("stream-clusters.json").toFile()).get("clusters")).hasSize(2);
+        assertThat(report.at("/stream_with_proposals/cost").asLong()).isZero();
+        assertThat(report.at("/merge_proposals/opened").asLong()).isEqualTo(1);
+        assertThat(report.at("/merge_proposals/merged").asLong()).isEqualTo(1);
+        assertThat(MAPPER.readTree(out.resolve("stream-with-proposals-clusters.json").toFile()).get("clusters"))
+                .hasSize(1);
     }
 
     @Test
@@ -208,7 +215,10 @@ class LinkerCliTest {
                 .containsPattern("1\\.00 +0 / 2 +0 / 2 +0 / 2")
                 .contains("(40:1)").contains("(wrong links free)").contains("(2.50:1)")
                 .contains("Stream: cheapest is merge score 0.70, stream threshold 0.82: $4,000 (current $4,000)")
-                .contains("Batch:  cheapest is merge score 0.70: $0 (current $0)");
+                .contains("Batch:  cheapest is merge score 0.70: $0 (current $0)")
+                .contains("Stream with every merge proposal accepted: wrongly linked / split / proposals opened")
+                .containsPattern("0\\.70\\* +0 / 0 / 2 +0 / 2 / 0")
+                .contains("Stream with every proposal accepted, current setting: $0 (2 proposals)");
     }
 
     @Test
@@ -225,6 +235,9 @@ class LinkerCliTest {
         assertThat(report.at("/points")).hasSize(1);
         assertThat(report.at("/points/0/stream_split_actors").asLong()).isEqualTo(1);
         assertThat(report.at("/points/0/batch_wrongly_linked").asLong()).isZero();
+        assertThat(report.at("/points/0/proposals_split_actors").asLong()).isZero();
+        assertThat(report.at("/points/0/proposals_wrongly_linked").asLong()).isZero();
+        assertThat(report.at("/points/0/proposals_opened").asLong()).isEqualTo(1);
         assertThat(report.at("/prices/0/missed_ring").asLong()).isEqualTo(2000);
         assertThat(report.at("/prices/0/cheapest_stream/cost").asLong()).isEqualTo(2000);
         assertThat(report.at("/prices/0/cheapest_batch/min_merge_score").asDouble()).isEqualTo(0.7);
