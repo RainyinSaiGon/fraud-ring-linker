@@ -8,7 +8,7 @@ Vite. It talks only to the service's REST API.
 
 ```bash
 # 1. The service (no Docker needed with the h2 profile)
-java -jar ../java/service/target/fraud-ring-linker-service.jar --spring.profiles.active=h2
+(cd ../java && ./gradlew :service:bootRun --args='--spring.profiles.active=h2')
 # 2. Some traffic to review
 (cd ../tools/simulator && npm run simulate)
 # 3. The page, at http://localhost:5173
@@ -43,7 +43,7 @@ npm run typecheck
 npm run e2e         # Playwright: starts the real service and the page, then clicks through a review
 ```
 
-The end-to-end test needs the service jar (`mvn -q -DskipTests package` in
+The end-to-end test needs the service jar (`./gradlew :service:bootJar` in
 `java/`) and a Chromium download the first time
 (`npx playwright install chromium`).
 

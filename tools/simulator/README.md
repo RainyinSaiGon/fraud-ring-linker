@@ -9,7 +9,7 @@ Node 20 or newer.
 Start the service first, for example without Docker:
 
 ```bash
-java -jar java/service/target/fraud-ring-linker-service.jar --spring.profiles.active=h2
+cd java && ./gradlew :service:bootRun --args='--spring.profiles.active=h2'
 ```
 
 Then, from this folder:

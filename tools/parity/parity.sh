@@ -7,7 +7,7 @@
 #   - stderr (both must succeed silently)
 #
 # Usage: tools/parity/parity.sh [seedCount]     (default 12)
-# Needs: go, java 21+, maven, node.
+# Needs: go, java 21+, node. (Gradle comes from the wrapper.)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -18,8 +18,8 @@ trap 'rm -rf "$work"' EXIT
 echo "Building Go linker..."
 (cd "$root/go" && go build -o "$work/go-linker" ./cmd/linker)
 echo "Building Java linker..."
-(cd "$root/java" && mvn -q -B -DskipTests -pl engine -am package)
-java_jar="$root/java/engine/target/fraud-ring-linker.jar"
+(cd "$root/java" && ./gradlew -q :engine:cliJar)
+java_jar="$root/java/engine/build/libs/fraud-ring-linker.jar"
 
 failures=0
 for seed in $(seq 1 "$seeds"); do

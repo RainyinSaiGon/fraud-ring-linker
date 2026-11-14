@@ -9,7 +9,7 @@ How this project is tested and which checks block a merge.
 | Unit | JUnit 5, AssertJ | Each rule, limit and weight behaves as documented | `java/engine/src/test` |
 | Boundary | JUnit parameterized tests | Every rarity limit, time window and score floor, on both sides of its boundary | `ScorerBoundaryTest` |
 | Mutation | PIT | Tests catch at least 85% of bugs planted in `scoring` and `clustering` | CI job "Mutation testing" |
-| Coverage | JaCoCo | Line and branch coverage never drop below the floors in `java/pom.xml` | `mvn verify` |
+| Coverage | JaCoCo | Line and branch coverage never drop below the floors in `java/gradle.properties` | `./gradlew build` |
 | Parity | `tools/parity` | Java and Go give byte-identical output on messy synthetic data | CI job "Go and Java parity" |
 | Web contract | MockMvc | JSON shape, validation and error codes of the REST API | `AccountControllerWebTest` |
 | Integration | REST Assured, Testcontainers | End-to-end flows on H2 and on real PostgreSQL | `ApiScenarios` |
@@ -37,8 +37,8 @@ Floors are set just under the measured values and only ever go up.
 
 ```bash
 cd java
-mvn verify                          # tests and coverage floors; reports in */target/site/jacoco
-mvn -Pmutation verify -pl engine    # mutation testing; report in engine/target/pit-reports
+./gradlew build            # tests and coverage floors; reports in */build/reports/jacoco
+./gradlew :engine:pitest   # mutation testing; report in engine/build/reports/pitest
 ```
 
 ## What mutation testing found

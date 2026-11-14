@@ -1,6 +1,6 @@
 # fraud-ring-linker (Java)
 
-Two Maven modules:
+Two Gradle modules:
 
 | Module | What it is |
 |---|---|
@@ -8,13 +8,18 @@ Two Maven modules:
 | [`service/`](service/) | Spring Boot 4 REST service: live account linking, cluster explanations, analyst decisions, and an append-only audit log in PostgreSQL. |
 
 ```bash
-mvn verify      # build both modules and run every test
+./gradlew build          # compile, run every test, enforce coverage floors, build both jars
+./gradlew :engine:pitest # mutation testing (slower; CI runs it as its own job)
 ```
 
-The build is moving to Gradle (epic #17). Both modules also build with `./gradlew build`:
-the CLI jar is at `engine/build/libs/fraud-ring-linker.jar` and the service jar at
-`service/build/libs/fraud-ring-linker-service.jar`. Run the service without Docker with
-`./gradlew :service:bootRun --args='--spring.profiles.active=h2'`.
+Use `gradlew.bat` on Windows Command Prompt or PowerShell. No Gradle install is
+needed: the wrapper downloads the pinned version. Jars land in
+`engine/build/libs/fraud-ring-linker.jar` (CLI) and
+`service/build/libs/fraud-ring-linker-service.jar` (service).
+
+Shared settings (Java 21 target, warnings as errors, JUnit, coverage floors) live
+in the `build-logic` convention plugin. Every dependency version is in
+`gradle/libs.versions.toml`.
 
 PostgreSQL tests use Testcontainers and need Docker. Without Docker they are
 skipped, and everything else still runs. CI always runs them.
@@ -28,15 +33,17 @@ skipped, and everything else still runs. CI always runs them.
 Without Docker or PostgreSQL (in-memory database; data is lost on stop):
 
 ```bash
-mvn -q -DskipTests package
-java -jar service/target/fraud-ring-linker-service.jar --spring.profiles.active=h2
+./gradlew :service:bootRun --args='--spring.profiles.active=h2'
+# or build the jar and run it:
+./gradlew :service:bootJar
+java -jar service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2
 ```
 
 With PostgreSQL (start one with `docker compose up -d` from this folder, or use your own):
 
 ```bash
 DATABASE_URL=jdbc:postgresql://localhost:5432/fraudlinker DATABASE_USERNAME=fraudlinker DATABASE_PASSWORD=fraudlinker \
-  java -jar service/target/fraud-ring-linker-service.jar
+  java -jar service/build/libs/fraud-ring-linker-service.jar
 ```
 
 Health: `GET /actuator/health` (includes `linkingEngine`, DOWN until the state is loaded).

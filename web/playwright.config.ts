@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Starts the real Java service (in-memory H2 database) and the page, then drives
-// a browser through them. Build the service jar first: `mvn -q -DskipTests package` in java/.
+// a browser through them. Build the service jar first: `./gradlew :service:bootJar` in java/.
 const servicePort = 18081;
 const webPort = 5174;
 
@@ -17,7 +17,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `java -jar ../java/service/target/fraud-ring-linker-service.jar --spring.profiles.active=h2 --server.port=${servicePort}`,
+      command: `java -jar ../java/service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2 --server.port=${servicePort}`,
       url: `http://localhost:${servicePort}/actuator/health`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
