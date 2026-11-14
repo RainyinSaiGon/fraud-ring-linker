@@ -183,6 +183,70 @@ class LinkerCliTest {
                 .contains("costs must not be negative");
     }
 
+    private Path sweepDataset(String name) throws Exception {
+        Path[] files = labelledDataset();
+        Path dir = Files.createDirectories(directory.resolve(name));
+        Files.copy(files[0], dir.resolve("accounts.jsonl"));
+        Files.copy(files[1], dir.resolve("constraints.jsonl"));
+        Files.copy(files[2], dir.resolve("truth.json"));
+        return dir;
+    }
+
+    @Test
+    void sweepPrintsTheMistakeGridAndTheCheapestSettingPerPrice() throws Exception {
+        Path seed = sweepDataset("seed-1");
+
+        Result result = run("sweep", "--datasets", seed + "," + seed, "--merge-scores", "1.0",
+                "--stream-thresholds", "0.9", "--costs", "50:2000,0:100,2:5");
+
+        assertThat(result.code()).as(result.stderr()).isZero();
+        assertThat(result.stdout())
+                .contains("Datasets: 2 (seed-1, seed-1)")
+                .contains("Current setting (*): merge score 0.70, stream threshold 0.82")
+                .containsPattern("0\\.82\\* +0\\.90")
+                .containsPattern("0\\.70\\* +0 / 0 +0 / 2 +0 / 2")
+                .containsPattern("1\\.00 +0 / 2 +0 / 2 +0 / 2")
+                .contains("(40:1)").contains("(wrong links free)").contains("(2.50:1)")
+                .contains("Stream: cheapest is merge score 0.70, stream threshold 0.82: $4,000 (current $4,000)")
+                .contains("Batch:  cheapest is merge score 0.70: $0 (current $0)");
+    }
+
+    @Test
+    void sweepAsJson() throws Exception {
+        Path seed = sweepDataset("seed-2");
+
+        Result result = run("sweep", "--datasets", seed.toString(), "--merge-scores=0.7", "--stream-thresholds=0.82",
+                "--costs", "50:2000", "--format", "json");
+
+        assertThat(result.code()).as(result.stderr()).isZero();
+        JsonNode report = MAPPER.readTree(result.stdout());
+        assertThat(report.at("/datasets/0").asText()).isEqualTo("seed-2");
+        assertThat(report.at("/current/stream_threshold").asDouble()).isEqualTo(0.82);
+        assertThat(report.at("/points")).hasSize(1);
+        assertThat(report.at("/points/0/stream_split_actors").asLong()).isEqualTo(1);
+        assertThat(report.at("/points/0/batch_wrongly_linked").asLong()).isZero();
+        assertThat(report.at("/prices/0/missed_ring").asLong()).isEqualTo(2000);
+        assertThat(report.at("/prices/0/cheapest_stream/cost").asLong()).isEqualTo(2000);
+        assertThat(report.at("/prices/0/cheapest_batch/min_merge_score").asDouble()).isEqualTo(0.7);
+    }
+
+    @Test
+    void sweepRejectsBadArguments() throws Exception {
+        String seed = sweepDataset("seed-3").toString();
+
+        assertThat(run("sweep").stderr()).contains("sweep requires --datasets");
+        assertThat(run("sweep", "--datasets", seed, "--merge-scores", "high").stderr())
+                .contains("--merge-scores must be numbers between 0 and 1, got \"high\"");
+        assertThat(run("sweep", "--datasets", seed, "--stream-thresholds", "1.5").stderr())
+                .contains("--stream-thresholds must be numbers between 0 and 1");
+        assertThat(run("sweep", "--datasets", seed, "--stream-thresholds", "NaN").stderr())
+                .contains("--stream-thresholds must be numbers between 0 and 1");
+        assertThat(run("sweep", "--datasets", seed, "--costs", "50").stderr()).contains("--costs must look like");
+        assertThat(run("sweep", "--datasets", seed, "--costs", "a:b").stderr()).contains("--costs must look like");
+        assertThat(run("sweep", "--datasets", seed, "--format", "csv").stderr()).contains("--format must be text or json");
+        assertThat(run("sweep", "--datasets", directory.resolve("nowhere").toString()).stderr()).contains("open accounts");
+    }
+
     @Test
     void missingFlagsAndUnknownFlagsFail() {
         assertThat(run("link", "--accounts", "a.jsonl").stderr()).contains("link requires");

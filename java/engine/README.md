@@ -70,6 +70,23 @@ Cost                                         $0       $2,000
   population (customer, household member, office worker).
 - `--write-clusters DIR` saves both clusterings, for example to score them with the Go evaluator.
 
+## Sweep mode
+
+Finds the cheapest merge score floor and stream threshold over several labelled
+datasets (each a directory with `accounts.jsonl`, `constraints.jsonl` and
+`truth.json`):
+
+```bash
+java -jar engine/build/libs/fraud-ring-linker.jar sweep --datasets out/seed-1,out/seed-2   [--merge-scores 0.55,0.60,...] [--stream-thresholds 0.70,0.74,...]   [--costs 50:2000,50:500,50:50] [--format text|json]
+```
+
+- It prints a grid of mistakes (wrongly linked accounts / multi-account actors
+  split) for every setting, then the cheapest setting at each price pair.
+- The current setting is always in the grid, and wins ties, so a tie never
+  suggests a change.
+- `tools/cost-sweep/sweep.sh [seedCount]` exports simulator seeds and runs the
+  sweep in one command.
+
 ## Input format
 
 `accounts.jsonl`, one object per line:

@@ -36,4 +36,12 @@ public record ScoringConfig(
                 0.75,
                 0.82);
     }
+
+    /** This operating point with a different merge score floor. */
+    public ScoringConfig withMinMergeScore(double score) {
+        return new ScoringConfig(score, strongEmailFrequencyLimit, strongPaymentFrequencyLimit, deviceFrequencyLimit,
+                supportingIpFrequencyLimit, tightTimeWindow, burstWindow, burstMinSize, burstMaxPrefix,
+                burstMinDistinctIpRatio, seededPrefixMinSize, seededPrefixMaxSize, seededPrefixMinDistinctIpRatio,
+                seededPrefixScore);
+    }
 }

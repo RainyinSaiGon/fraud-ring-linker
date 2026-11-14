@@ -42,7 +42,7 @@ Sources:
 |---|---|---|
 | 3 | Quality gates: coverage and mutation testing in CI, manual test plan | in progress |
 | 4 | Traffic simulator (Node) and analyst page (React) | in progress |
-| 5 | Business cost report | planned |
+| 5 | Business cost report | in progress |
 | 6 | Mule-network detection from transfers | planned |
 | 7 | Account-takeover signals at login | planned |
 | 8 | Login and data protection | planned |
@@ -97,6 +97,47 @@ open a **merge proposal** for an analyst rather than merging silently. Also
 consider a nightly batch relink whose differences go to the same review queue.
 Each missed ring costs about 40 times a wrong link, so this is likely the
 biggest saving available.
+
+**Threshold sweep (#32):** `tools/cost-sweep/sweep.sh` exports simulator seeds
+1 to 10 (about 290 sign-ups and 8 rings each) and links every one at 7 merge
+score floors (0.55 to 0.85) and 7 stream thresholds (0.70 to 0.94). Each cell is
+wrongly linked accounts / multi-account actors split, summed over the 10 seeds:
+
+| Merge score | Batch | Stream at 0.70 to 0.86 | Stream at 0.90 | Stream at 0.94 |
+|---|---|---|---|---|
+| 0.55 to 0.85 (0.70 today) | 0 / 0 | 0 / 12 | 0 / 47 | 0 / 55 |
+
+Every row is the same, and every split actor is a fraud ring: batch links 80 of
+80 rings, streaming 68 of 80.
+
+| Prices (wrong link : missed ring) | Cheapest stream setting | Stream cost | Batch cost |
+|---|---|---|---|
+| $50 : $2,000 (40:1, today's estimate) | today's (0.70, 0.82) | $24,000 | $0 |
+| $50 : $500 (10:1) | today's | $6,000 | $0 |
+| $50 : $50 (1:1) | today's | $600 | $0 |
+
+The cost curve is flat from 0.30 to 0.80 for the merge score and from 0.50 to
+0.86 for the stream threshold. Prices only change how much each mistake costs,
+not which setting is cheapest. Run locally on the original take-home sample, the
+answer is the same: today's setting is cheapest at all three ratios ($12,000
+batch, $16,000 stream at 40:1), and the curve is flat over the same ranges.
+
+What this means:
+
+- **Keep the defaults.** Both sit inside the flat region, with room on each
+  side. Raising either threshold only loses rings; lowering them adds nothing.
+- **Thresholds are not the lever.** A pair merges only when a named rule fires
+  (shared card, same device with a matching email, and so on), and those pairs
+  score well above the floor. Lowering the floor admits no new pairs, so no
+  wrong links appear even at a floor of 0.20 on the simulator.
+- **The saving is elsewhere.** All 12 stream misses come from arrival order, so
+  the merge proposals in #29 target the whole $24,000. On the take-home sample,
+  batch still misses 6 actors that no rule links; new rules would help there,
+  not lower thresholds.
+- **The simulator is too easy on false positives.** Nothing was wrongly linked
+  at any setting, so this sweep cannot show the other side of the trade-off.
+  Harder legitimate cases (shared family cards, shared office devices) would
+  make it meaningful.
 
 ### Stage 6: mule-network detection
 
