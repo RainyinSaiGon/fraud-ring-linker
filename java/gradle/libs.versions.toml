@@ -1,0 +1,14 @@
+# Every dependency and plugin version in one place.
+# Versions match the Maven build exactly while both builds exist (epic #17).
+
+[versions]
+jackson = "2.18.2"
+junit = "5.11.4"
+assertj = "3.27.3"
+
+[libraries]
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
