@@ -13,9 +13,8 @@ group = "io.github.rainyinsaigon"
 version = "0.2.0-SNAPSHOT"
 
 tasks.withType<JavaCompile>().configureEach {
-    // Compile against the Java 21 API whatever JDK runs Gradle, exactly like Maven's
-    // maven.compiler.release=21. A toolchain would force a JDK 21 download on machines
-    // that only have a newer JDK; CI already runs the tests on JDK 21.
+    // Compile against the Java 21 API whatever JDK runs Gradle. A toolchain would force
+    // a JDK 21 download on machines that only have a newer JDK; CI runs the tests on JDK 21.
     options.release = 21
     options.encoding = "UTF-8"
     // Every lint warning fails the build.
@@ -68,7 +67,7 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     }
 }
 
-// `check` (and so `build`) fails when coverage drops below a floor, like `mvn verify`.
+// `check` (and so `build`) fails when coverage drops below a floor.
 tasks.named("check") {
     dependsOn("jacocoTestReport", "jacocoTestCoverageVerification")
 }

@@ -5,7 +5,6 @@ pluginManagement {
 
 rootProject.name = "fraud-ring-linker"
 
-// Modules moved from Maven to Gradle one at a time (epic #17).
 include("engine", "service")
 
 dependencyResolutionManagement {

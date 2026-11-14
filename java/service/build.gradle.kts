@@ -28,7 +28,7 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-// Runnable Spring Boot jar with the same name as the Maven build:
+// Runnable Spring Boot jar:
 // build/libs/fraud-ring-linker-service.jar
 tasks.bootJar {
     archiveFileName = "fraud-ring-linker-service.jar"
