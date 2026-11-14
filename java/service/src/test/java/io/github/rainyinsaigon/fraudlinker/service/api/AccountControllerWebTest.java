@@ -46,7 +46,7 @@ class AccountControllerWebTest {
     @Test
     void registersAndReturnsSnakeCaseBodyWithLocation() throws Exception {
         when(accounts.register(any())).thenReturn(new AccountService.LinkResult(
-                new Assignment("acc_1", "c7", 0.91), 3, new RiskAssessment(RiskAction.REVIEW, "Linked.")));
+                new Assignment("acc_1", "c7", 0.91), 3, new RiskAssessment(RiskAction.REVIEW, "Linked."), java.util.List.of()));
 
         mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isCreated())
@@ -55,7 +55,8 @@ class AccountControllerWebTest {
                 .andExpect(jsonPath("$.cluster_id").value("c7"))
                 .andExpect(jsonPath("$.confidence").value(0.91))
                 .andExpect(jsonPath("$.cluster_size").value(3))
-                .andExpect(jsonPath("$.risk_action").value("REVIEW"));
+                .andExpect(jsonPath("$.risk_action").value("REVIEW"))
+                .andExpect(jsonPath("$.merge_proposal_ids").isEmpty());
     }
 
     @Test
@@ -66,7 +67,7 @@ class AccountControllerWebTest {
             org.assertj.core.api.Assertions.assertThat(account.deviceId()).isNull();
             org.assertj.core.api.Assertions.assertThat(account.ip()).isEmpty();
             return new AccountService.LinkResult(new Assignment("acc_1", "c1", 1), 1,
-                    new RiskAssessment(RiskAction.ALLOW, "ok"));
+                    new RiskAssessment(RiskAction.ALLOW, "ok"), java.util.List.of());
         });
 
         mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content("""

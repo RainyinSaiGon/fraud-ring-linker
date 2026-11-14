@@ -122,10 +122,12 @@ class MergeCandidatesTest {
         StreamResult result = streamRing(state);
         MergeCandidate candidate = result.mergeCandidates().get(0);
         boolean anySeed = isSeed(state, "r1") || isSeed(state, "r2");
+        assertThat(state.clusterCount()).isEqualTo(2);
 
         MergeOutcome outcome = state.mergeClusters(result.assignment().clusterId(), candidate.clusterId(), candidate.score());
 
         assertThat(outcome).isEqualTo(MergeOutcome.MERGED);
+        assertThat(state.clusterCount()).isEqualTo(1);
         assertThat(state.memberIds("c1")).containsExactly("r1", "r2", "r3");
         assertThat(state.memberIds("c2")).isEmpty();
         assertThat(state.clusterIdOf("r2")).contains("c1");

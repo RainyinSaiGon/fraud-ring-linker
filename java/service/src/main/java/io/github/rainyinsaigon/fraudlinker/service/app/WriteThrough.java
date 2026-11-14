@@ -43,8 +43,12 @@ public class WriteThrough {
         });
     }
 
-    /** Changes whenever an account or a constraint is added: the only two ways the engine is mutated. */
+    /**
+     * Changes whenever the engine is mutated: an account or a constraint is added
+     * (size, pair count), or two clusters are merged (cluster count drops).
+     */
     private static long fingerprint(LinkState state) {
-        return state.store().size() * 1_000_003L + state.constraints().pairCount();
+        return state.store().size() * 1_000_003L + state.constraints().pairCount()
+                + state.clusterCount() * 1_000_000_007L;
     }
 }

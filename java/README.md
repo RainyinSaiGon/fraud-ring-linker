@@ -56,13 +56,16 @@ validation).
 
 | Method and path | What it does |
 |---|---|
-| `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence and **risk action**. 201, or 409 if the ID exists. |
+| `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence, **risk action**, and the IDs of any merge proposals it opened. 201, or 409 if the ID exists. |
 | `GET /api/v1/accounts/{id}` | The account, its cluster and current risk action. |
 | `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
 | `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, and which pairs are linked by which rule and shared signals. |
 | `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","analyst":"...","note":"..."}`. Covers every current member. |
 | `GET /api/v1/clusters/{id}/decisions` | Decision history for the cluster's current members. |
 | `POST /api/v1/constraints` | `{"account_a","account_b","actor"}`: two accounts are different people (for example, both passed identity checks). 201 new, 200 already known, 409 if they are already linked. |
+| `GET /api/v1/merge-proposals?status=OPEN&limit=` | Merge proposals (`OPEN`, `ACCEPTED` or `REJECTED`), oldest first, with each side's accounts and current cluster. |
+| `POST /api/v1/merge-proposals/{id}/accept` | `{"analyst","note"}`: merges the clusters both sides are in now. 409 if already decided, or if a verified-distinct pair would end up together. |
+| `POST /api/v1/merge-proposals/{id}/reject` | `{"analyst","note"}`: keeps the clusters apart; the same pair is not proposed again. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |
 
 Example:
@@ -115,6 +118,15 @@ ring's card or device is restricted the moment it signs up.
   on `audit_events`.
 - **A late constraint cannot split a cluster.** Two accounts already linked
   return 409. Splitting needs a full relink plus a person, not an API call.
+- **Clusters merge only when an analyst accepts.** Streaming never merges two
+  existing clusters, so a ring whose members arrive in an unlucky order stays
+  split. When a new account also links strongly to another cluster, the service
+  opens a merge proposal instead of merging silently:
+  - It is only proposed if the merge keeps every verified-distinct pair apart,
+    and accepting checks that again.
+  - Accepted merges are stored and replayed after the batch relink on every
+    rebuild, so they survive a restart.
+  - Proposed, accepted and rejected merges are all audited.
 
 ### Not built yet
 

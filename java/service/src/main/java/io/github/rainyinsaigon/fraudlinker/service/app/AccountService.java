@@ -9,6 +9,7 @@ import io.github.rainyinsaigon.fraudlinker.service.persistence.AuditRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepository;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskPolicy;
+import io.github.rainyinsaigon.fraudlinker.streaming.StreamResult;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -25,11 +26,14 @@ public class AccountService {
     private final AccountRepository accounts;
     private final DecisionRepository decisions;
     private final AuditRepository audit;
+    private final MergeProposalService mergeProposals;
     private final Clock clock;
 
     public AccountService(LinkerEngine engine, WriteThrough writeThrough, AccountRepository accounts,
-                          DecisionRepository decisions, AuditRepository audit, Clock clock) {
+                          DecisionRepository decisions, AuditRepository audit, MergeProposalService mergeProposals,
+                          Clock clock) {
         this.engine = engine;
+        this.mergeProposals = mergeProposals;
         this.writeThrough = writeThrough;
         this.accounts = accounts;
         this.decisions = decisions;
@@ -37,14 +41,16 @@ public class AccountService {
         this.clock = clock;
     }
 
-    public record LinkResult(Assignment assignment, int clusterSize, RiskAssessment risk) {
+    public record LinkResult(Assignment assignment, int clusterSize, RiskAssessment risk,
+                             List<MergeProposal> mergeProposals) {
     }
 
     public record AccountView(Account account, String clusterId, int clusterSize, RiskAssessment risk) {
     }
 
     /**
-     * Stores a new account, links it, and audits the outcome.
+     * Stores a new account, links it, and audits the outcome. If it also linked
+     * strongly to other clusters, a merge proposal is opened for each.
      *
      * @throws ConflictException if the account ID already exists
      */
@@ -56,7 +62,8 @@ public class AccountService {
             }
             Instant now = clock.instant();
             accounts.insert(account, now);
-            Assignment assignment = session.streamLinker().assign(account);
+            StreamResult result = session.streamLinker().assignWithCandidates(account);
+            Assignment assignment = result.assignment();
             List<String> members = state.memberIds(assignment.clusterId());
             RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
 
@@ -67,7 +74,8 @@ public class AccountService {
             details.put("reason", risk.reason());
             audit.record(now, AuditRepository.ACCOUNT_LINKED, account.accountId(), assignment.clusterId(),
                     AuditRepository.SYSTEM, details);
-            return new LinkResult(assignment, members.size(), risk);
+            List<MergeProposal> proposals = mergeProposals.propose(state, assignment, result.mergeCandidates(), now);
+            return new LinkResult(assignment, members.size(), risk, proposals);
         });
     }
 
