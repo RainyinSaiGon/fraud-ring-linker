@@ -3,15 +3,19 @@
 //   node src/cli.mjs run   [--base-url URL] [--seed N] [--customers N] [--households N]
 //                          [--office-workers N] [--rings N] [--truth FILE]
 //   node src/cli.mjs extra --truth FILE [--ring INDEX] [--base-url URL]
+//   node src/cli.mjs export [--seed N] [--customers N] [--households N]
+//                           [--office-workers N] [--rings N] [--out-dir DIR]
 //
 // `run` sends a scenario to the service and prints how well rings were recovered.
 // `extra` sends one more sign-up reusing a planted ring's card and phone.
+// `export` writes a scenario to files (accounts, constraints, ground truth) with no service.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { createClient, registerAll } from "./client.mjs";
 import { formatSummary, summarize } from "./report.mjs";
+import { writeScenario } from "./export.mjs";
 import { buildScenario, DEFAULTS, extraRingMember } from "./scenario.mjs";
 
 const [command, ...rest] = process.argv.slice(2);
@@ -27,6 +31,7 @@ const { values } = parseArgs({
     truth: { type: "string", default: "out/truth.json" },
     ring: { type: "string", default: "0" },
     "run-id": { type: "string" },
+    "out-dir": { type: "string" },
   },
 });
 
@@ -37,8 +42,10 @@ try {
     await run();
   } else if (command === "extra") {
     await extra();
+  } else if (command === "export") {
+    exportScenario();
   } else {
-    console.error("usage: cli.mjs run|extra [options]  (see the header of src/cli.mjs)");
+    console.error("usage: cli.mjs run|extra|export [options]  (see the header of src/cli.mjs)");
     process.exit(2);
   }
 } catch (error) {
@@ -88,4 +95,22 @@ async function extra() {
     new Date().toISOString().replace(/\.\d+Z$/, "Z"));
   const response = await client.registerAccount(account);
   console.log(`${response.account_id} -> ${response.cluster_id}: ${response.risk_action} (${response.reason})`);
+}
+
+function exportScenario() {
+  const seed = Number(values.seed);
+  // A fixed run ID (no timestamp) keeps exports byte-identical for the same seed.
+  const runId = values["run-id"] ?? `s${seed}`;
+  const outDir = values["out-dir"] ?? `out/seed-${seed}`;
+  const scenario = buildScenario({
+    seed,
+    runId,
+    customers: Number(values.customers),
+    households: Number(values.households),
+    officeWorkers: Number(values["office-workers"]),
+    rings: Number(values.rings),
+  });
+  const paths = writeScenario(scenario, outDir);
+  console.log(`Wrote ${scenario.accounts.length} accounts and ${scenario.truth.rings.length} rings:`);
+  for (const path of Object.values(paths)) console.log(`  ${path}`);
 }
