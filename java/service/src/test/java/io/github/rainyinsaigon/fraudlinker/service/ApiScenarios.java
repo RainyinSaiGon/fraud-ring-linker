@@ -149,6 +149,26 @@ abstract class ApiScenarios {
     }
 
     @Test
+    void reviewQueueListsLinkedClustersUntilAnAnalystDecides() {
+        String card = "card_" + run;
+        String clusterId = register(id("q1"), null, card).statusCode(201).extract().path("cluster_id");
+        given().queryParam("limit", 500).get("/api/v1/clusters").then()
+                .statusCode(200)
+                .body("cluster_id", org.hamcrest.Matchers.not(hasItem(clusterId)));
+
+        register(id("q2"), null, card).statusCode(201);
+        given().queryParam("limit", 500).get("/api/v1/clusters").then()
+                .body("find { it.cluster_id == '" + clusterId + "' }.size", equalTo(2))
+                .body("find { it.cluster_id == '" + clusterId + "' }.risk_action", equalTo("REVIEW"));
+
+        decide(clusterId, "CONFIRMED_FRAUD").statusCode(201);
+        given().queryParam("limit", 500).get("/api/v1/clusters").then()
+                .body("cluster_id", org.hamcrest.Matchers.not(hasItem(clusterId)));
+
+        given().queryParam("limit", 0).get("/api/v1/clusters").then().statusCode(400);
+    }
+
+    @Test
     void newMembersAfterANotFraudReviewGoBackToReview() {
         String device = "dev_" + run;
         String card = "card_" + run;

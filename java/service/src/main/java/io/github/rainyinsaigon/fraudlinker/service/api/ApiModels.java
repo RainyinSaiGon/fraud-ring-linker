@@ -67,6 +67,10 @@ public final class ApiModels {
             String reason) {
     }
 
+    public record ClusterSummaryResponse(String clusterId, int size, double confidence, RiskAction riskAction,
+                                         String reason) {
+    }
+
     public record LinkResponse(String accountA, String accountB, String rule, double score, List<String> sharedSignals) {
     }
 

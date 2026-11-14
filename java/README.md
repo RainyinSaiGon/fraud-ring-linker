@@ -46,6 +46,7 @@ validation).
 |---|---|
 | `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence and **risk action**. 201, or 409 if the ID exists. |
 | `GET /api/v1/accounts/{id}` | The account, its cluster and current risk action. |
+| `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
 | `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, and which pairs are linked by which rule and shared signals. |
 | `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","analyst":"...","note":"..."}`. Covers every current member. |
 | `GET /api/v1/clusters/{id}/decisions` | Decision history for the cluster's current members. |
