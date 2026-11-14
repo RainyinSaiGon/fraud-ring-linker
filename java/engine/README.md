@@ -41,6 +41,35 @@ writes (and flushes) one line per account:
 
 Errors go to stderr only, and the exit code is 1.
 
+## Cost mode
+
+Scores a labelled dataset (for example one exported by `tools/simulator`) in
+batch and in stream mode, and prices the mistakes:
+
+```bash
+java -jar engine/build/libs/fraud-ring-linker.jar cost \
+  --accounts accounts.jsonl --constraints constraints.jsonl --truth truth.json \
+  [--wrong-link-cost 50] [--missed-ring-cost 2000] [--format text|json] [--write-clusters DIR]
+```
+
+```text
+Costs: $50 per wrongly linked account, $2,000 per missed ring
+
+                                          batch       stream
+Fraud rings fully linked                  8 / 8        7 / 8
+Multi-account actors split                    0            1
+Wrongly linked accounts                       0            0
+Cost                                         $0       $2,000
+```
+
+- **Batch** links everything at once. **Stream** starts empty and adds accounts
+  one by one in file order, the way the REST service does.
+- Metrics and costs use the same definitions as the Go evaluator
+  (`go/internal/evaluation`); `Cost` is its general proxy, `Cost, fraud-list view` its literal proxy.
+- With a versioned `truth.json`, wrongly linked accounts are also broken down by
+  population (customer, household member, office worker).
+- `--write-clusters DIR` saves both clusterings, for example to score them with the Go evaluator.
+
 ## Input format
 
 `accounts.jsonl`, one object per line:

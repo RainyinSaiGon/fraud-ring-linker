@@ -116,6 +116,73 @@ class LinkerCliTest {
         }
     }
 
+    private Path[] labelledDataset() throws Exception {
+        Path accounts = directory.resolve("cost-accounts.jsonl");
+        Path constraints = directory.resolve("cost-constraints.jsonl");
+        Path truth = directory.resolve("cost-truth.json");
+        Files.writeString(accounts,
+                "{\"account_id\":\"r1\",\"email\":\"maria.lopez@x.com\",\"device_id\":\"phone-1\",\"ip\":\"10.1.0.1\",\"payment_fingerprint\":null,\"created_at\":\"2026-11-01T09:00:00Z\"}\n"
+                        + "{\"account_id\":\"r2\",\"email\":\"zz.other@y.com\",\"device_id\":null,\"ip\":\"10.2.0.1\",\"payment_fingerprint\":\"card-1\",\"created_at\":\"2026-11-01T09:01:00Z\"}\n"
+                        + "{\"account_id\":\"r3\",\"email\":\"maria.lopes@x.com\",\"device_id\":\"phone-1\",\"ip\":\"10.3.0.1\",\"payment_fingerprint\":\"card-1\",\"created_at\":\"2026-11-01T09:02:00Z\"}\n");
+        Files.writeString(constraints, "");
+        Files.writeString(truth, """
+                {"schema_version": 1,
+                 "actors": [{"actor_id": "ring_0", "kind": "fraud_ring", "account_ids": ["r1", "r2", "r3"]}],
+                 "account_to_actor": {"r1": "ring_0", "r2": "ring_0", "r3": "ring_0"},
+                 "fraud_actor_ids": ["ring_0"]}
+                """);
+        return new Path[] {accounts, constraints, truth};
+    }
+
+    @Test
+    void costPrintsBatchAndStreamSideBySide() throws Exception {
+        Path[] files = labelledDataset();
+
+        Result result = run("cost", "--accounts", files[0].toString(), "--constraints", files[1].toString(),
+                "--truth", files[2].toString());
+
+        assertThat(result.code()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).contains("$50 per wrongly linked account, $2,000 per missed ring")
+                .containsPattern("Fraud rings fully linked +1 / 1 +0 / 1")
+                .containsPattern("Cost +\\$0 +\\$2,000");
+    }
+
+    @Test
+    void costAsJsonWithCustomPricesAndWrittenClusters() throws Exception {
+        Path[] files = labelledDataset();
+        Path out = directory.resolve("clusters-out");
+
+        Result result = run("cost", "--accounts", files[0].toString(), "--constraints", files[1].toString(),
+                "--truth", files[2].toString(), "--missed-ring-cost", "500", "--wrong-link-cost=10",
+                "--format", "json", "--write-clusters", out.toString());
+
+        assertThat(result.code()).as(result.stderr()).isZero();
+        JsonNode report = MAPPER.readTree(result.stdout());
+        assertThat(report.at("/costs/missed_ring").asLong()).isEqualTo(500);
+        assertThat(report.at("/costs/wrong_link").asLong()).isEqualTo(10);
+        assertThat(report.at("/batch/cost").asLong()).isZero();
+        assertThat(report.at("/stream/cost").asLong()).isEqualTo(500);
+        assertThat(report.at("/stream/split_fraud_rings").asInt()).isEqualTo(1);
+        assertThat(MAPPER.readTree(out.resolve("batch-clusters.json").toFile()).get("clusters")).hasSize(1);
+        assertThat(MAPPER.readTree(out.resolve("stream-clusters.json").toFile()).get("clusters")).hasSize(2);
+    }
+
+    @Test
+    void costRejectsMissingOrBadArguments() throws Exception {
+        Path[] files = labelledDataset();
+        String a = files[0].toString();
+        String c = files[1].toString();
+        String t = files[2].toString();
+
+        assertThat(run("cost", "--accounts", a).stderr()).contains("cost requires --accounts, --constraints and --truth");
+        assertThat(run("cost", "--accounts", a, "--constraints", c, "--truth", t, "--missed-ring-cost", "lots").stderr())
+                .contains("--missed-ring-cost must be a whole number of dollars");
+        assertThat(run("cost", "--accounts", a, "--constraints", c, "--truth", t, "--format", "xml").stderr())
+                .contains("--format must be text or json");
+        assertThat(run("cost", "--accounts", a, "--constraints", c, "--truth", t, "--wrong-link-cost", "-5").stderr())
+                .contains("costs must not be negative");
+    }
+
     @Test
     void missingFlagsAndUnknownFlagsFail() {
         assertThat(run("link", "--accounts", "a.jsonl").stderr()).contains("link requires");
