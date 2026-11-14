@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { ClusterDetail, ClusterSummary, DecisionResult } from "../api";
+import type { ClusterDetail, ClusterSummary, DecisionResult, MergeAcceptResult, MergeProposal } from "../api";
 
 /** Replaces global fetch with a router of canned responses, and records every call. */
 export function mockFetch(routes: Record<string, (init?: RequestInit) => { status?: number; body?: unknown }>) {
@@ -57,4 +57,39 @@ export const decisionResult = (analyst: string): DecisionResult => ({
   },
   risk_action: "RESTRICT",
   reason: `Linked to accounts confirmed as fraud by ${analyst}.`,
+});
+
+export const PROPOSAL_ID = "3f2b8c1e-7a4d-4e5f-9b6a-0c1d2e3f4a5b";
+
+export const proposal = (overrides: Partial<MergeProposal> = {}): MergeProposal => ({
+  proposal_id: PROPOSAL_ID,
+  status: "OPEN",
+  trigger_account_id: "acc_3",
+  score: 0.9,
+  rule: "device_and_email",
+  proposed_at: "2026-11-14T02:00:00Z",
+  cluster_a: "c4",
+  cluster_b: "c5",
+  current_cluster_a: "c4",
+  current_cluster_b: "c5",
+  account_ids_a: ["acc_1", "acc_3"],
+  account_ids_b: ["acc_2"],
+  decided_by: null,
+  note: null,
+  decided_at: null,
+  ...overrides,
+});
+
+export const mergeAcceptResult = (analyst: string): MergeAcceptResult => ({
+  proposal: proposal({
+    status: "ACCEPTED",
+    current_cluster_b: "c4",
+    decided_by: analyst,
+    decided_at: "2026-11-14T03:00:00Z",
+  }),
+  merged: true,
+  cluster_id: "c4",
+  cluster_size: 3,
+  risk_action: "REVIEW",
+  reason: "Linked to 2 other account(s); not reviewed yet.",
 });

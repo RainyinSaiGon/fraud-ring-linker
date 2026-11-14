@@ -112,6 +112,16 @@ public class MergeProposalService {
     }
 
     /**
+     * One proposal, in any status.
+     *
+     * @throws NotFoundException if the proposal is unknown
+     */
+    public ProposalView get(UUID proposalId) {
+        return engine.withLock(session -> view(session.state(), proposals.findById(proposalId)
+                .orElseThrow(() -> new NotFoundException("Merge proposal " + proposalId + " not found."))));
+    }
+
+    /**
      * Merges the clusters that the proposal's accounts are in now, and marks it accepted.
      *
      * @throws NotFoundException if the proposal is unknown

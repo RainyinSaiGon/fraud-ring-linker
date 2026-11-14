@@ -43,6 +43,11 @@ public class MergeProposalController {
         return proposals.list(status, limit).stream().map(MergeProposalResponse::of).toList();
     }
 
+    @GetMapping("/{proposalId}")
+    public MergeProposalResponse get(@PathVariable UUID proposalId) {
+        return MergeProposalResponse.of(proposals.get(proposalId));
+    }
+
     @PostMapping("/{proposalId}/accept")
     public MergeAcceptResponse accept(@PathVariable UUID proposalId, @Valid @RequestBody MergeDecisionRequest request) {
         MergeProposalService.AcceptResult result = proposals.accept(proposalId, request.analyst().strip(),

@@ -64,6 +64,7 @@ validation).
 | `GET /api/v1/clusters/{id}/decisions` | Decision history for the cluster's current members. |
 | `POST /api/v1/constraints` | `{"account_a","account_b","actor"}`: two accounts are different people (for example, both passed identity checks). 201 new, 200 already known, 409 if they are already linked. |
 | `GET /api/v1/merge-proposals?status=OPEN&limit=` | Merge proposals (`OPEN`, `ACCEPTED` or `REJECTED`), oldest first, with each side's accounts and current cluster. |
+| `GET /api/v1/merge-proposals/{id}` | One proposal, in any status. |
 | `POST /api/v1/merge-proposals/{id}/accept` | `{"analyst","note"}`: merges the clusters both sides are in now. 409 if already decided, or if a verified-distinct pair would end up together. |
 | `POST /api/v1/merge-proposals/{id}/reject` | `{"analyst","note"}`: keeps the clusters apart; the same pair is not proposed again. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |

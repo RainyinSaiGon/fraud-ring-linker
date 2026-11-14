@@ -342,6 +342,11 @@ abstract class ApiScenarios {
         // A decision is final.
         decideProposal(proposalId, "accept").statusCode(409);
         decideProposal(proposalId, "reject").statusCode(409);
+        given().get("/api/v1/merge-proposals/{id}", proposalId).then()
+                .statusCode(200)
+                .body("status", equalTo("ACCEPTED"))
+                .body("account_ids_a", hasSize(2))
+                .body("account_ids_b", hasSize(1));
         given().queryParam("status", "ACCEPTED").queryParam("limit", 500).get("/api/v1/merge-proposals").then()
                 .body(find(proposalId) + ".current_cluster_a", equalTo(cluster))
                 .body(find(proposalId) + ".current_cluster_b", equalTo(cluster));
@@ -418,6 +423,7 @@ abstract class ApiScenarios {
     @Test
     void badProposalRequestsAreReportedClearly() {
         decideProposal(UUID.randomUUID().toString(), "accept").statusCode(404);
+        given().get("/api/v1/merge-proposals/{id}", UUID.randomUUID()).then().statusCode(404);
         decideProposal("not-a-uuid", "accept").statusCode(400);
         given().queryParam("status", "MAYBE").get("/api/v1/merge-proposals").then().statusCode(400);
         given().queryParam("limit", 0).get("/api/v1/merge-proposals").then().statusCode(400);
