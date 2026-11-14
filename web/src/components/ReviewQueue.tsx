@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type ClusterSummary } from "../api";
 import { percent } from "../labels";
+import { ProposalList } from "./ProposalList";
 import { RiskBadge } from "./RiskBadge";
 
 type State =
@@ -11,6 +12,7 @@ type State =
 /** Clusters of linked accounts that still need an analyst's decision, largest first. */
 export function ReviewQueue() {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [reloads, setReloads] = useState(0);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -29,7 +31,14 @@ export function ReviewQueue() {
     <section aria-labelledby="queue-heading">
       <div className="section-head">
         <h1 id="queue-heading">Review queue</h1>
-        <button type="button" className="button secondary" onClick={() => void load()}>
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => {
+            setReloads((count) => count + 1);
+            void load();
+          }}
+        >
           Refresh
         </button>
       </div>
@@ -81,6 +90,8 @@ export function ReviewQueue() {
           </table>
         </div>
       )}
+
+      <ProposalList reloadToken={reloads} />
     </section>
   );
 }

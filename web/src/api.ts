@@ -59,6 +59,40 @@ export interface AuditEvent {
   details: Record<string, unknown>;
 }
 
+export type ProposalStatus = "OPEN" | "ACCEPTED" | "REJECTED";
+
+/**
+ * A new account linked strongly to two clusters: it joined side A, and side B
+ * is proposed for merging. Accounts are stored per side because cluster IDs can
+ * change; current_cluster_a/b are where those accounts are now.
+ */
+export interface MergeProposal {
+  proposal_id: string;
+  status: ProposalStatus;
+  trigger_account_id: string;
+  score: number;
+  rule: string;
+  proposed_at: string;
+  cluster_a: string;
+  cluster_b: string;
+  current_cluster_a: string | null;
+  current_cluster_b: string | null;
+  account_ids_a: string[];
+  account_ids_b: string[];
+  decided_by: string | null;
+  note: string | null;
+  decided_at: string | null;
+}
+
+export interface MergeAcceptResult {
+  proposal: MergeProposal;
+  merged: boolean;
+  cluster_id: string;
+  cluster_size: number;
+  risk_action: RiskAction;
+  reason: string;
+}
+
 /** An error the page can show as-is: the service's own message, or a plain explanation. */
 export class ApiError extends Error {
   constructor(
@@ -99,6 +133,12 @@ async function problemMessage(response: Response): Promise<string> {
   return `The service answered with status ${response.status}.`;
 }
 
+function decisionBody(analyst: string, note: string): string {
+  return JSON.stringify({ analyst, note: note.trim() === "" ? null : note.trim() });
+}
+
+const proposalPath = (proposalId: string) => `/api/v1/merge-proposals/${encodeURIComponent(proposalId)}`;
+
 export const api = {
   reviewQueue: (limit = 100) => request<ClusterSummary[]>(`/api/v1/clusters?limit=${limit}`),
   cluster: (clusterId: string) => request<ClusterDetail>(`/api/v1/clusters/${encodeURIComponent(clusterId)}`),
@@ -111,4 +151,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
     }),
+  proposals: (status: ProposalStatus = "OPEN", limit = 100) =>
+    request<MergeProposal[]>(`/api/v1/merge-proposals?status=${status}&limit=${limit}`),
+  proposal: (proposalId: string) => request<MergeProposal>(proposalPath(proposalId)),
+  acceptProposal: (proposalId: string, analyst: string, note: string) =>
+    request<MergeAcceptResult>(`${proposalPath(proposalId)}/accept`, { method: "POST", body: decisionBody(analyst, note) }),
+  rejectProposal: (proposalId: string, analyst: string, note: string) =>
+    request<MergeProposal>(`${proposalPath(proposalId)}/reject`, { method: "POST", body: decisionBody(analyst, note) }),
 };

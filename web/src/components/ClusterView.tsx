@@ -156,6 +156,10 @@ function describe(event: AuditEvent): string {
       return `${event.account_id} joined (${String(event.details.risk_action ?? "")})`;
     case "decision.recorded":
       return `${event.actor} marked it ${event.details.outcome === "CONFIRMED_FRAUD" ? "fraud" : "not fraud"}`;
+    case "merge.proposed":
+      return `${event.account_id} also links to cluster ${String(event.details.other_cluster_id ?? "")}; merge proposed`;
+    case "merge.accepted":
+      return `${event.actor} merged clusters (${String(event.details.cluster_size ?? "")} accounts)`;
     default:
       return `${event.event_type} by ${event.actor}`;
   }

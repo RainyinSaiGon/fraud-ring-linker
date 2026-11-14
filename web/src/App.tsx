@@ -1,11 +1,20 @@
 import { useEffect, useState } from "react";
 import { ClusterView } from "./components/ClusterView";
+import { ProposalView } from "./components/ProposalView";
 import { ReviewQueue } from "./components/ReviewQueue";
 
+export type Route =
+  | { page: "queue" }
+  | { page: "cluster"; clusterId: string }
+  | { page: "proposal"; proposalId: string };
+
 /** Routes are hash-based (#/clusters/c12) so links and refreshes work with no server routing. */
-export function parseRoute(hash: string): { page: "queue" } | { page: "cluster"; clusterId: string } {
-  const match = /^#\/clusters\/([A-Za-z0-9]+)$/.exec(hash);
-  return match?.[1] ? { page: "cluster", clusterId: match[1] } : { page: "queue" };
+export function parseRoute(hash: string): Route {
+  const cluster = /^#\/clusters\/([A-Za-z0-9]+)$/.exec(hash);
+  if (cluster?.[1]) return { page: "cluster", clusterId: cluster[1] };
+  const proposal = /^#\/proposals\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/.exec(hash);
+  if (proposal?.[1]) return { page: "proposal", proposalId: proposal[1] };
+  return { page: "queue" };
 }
 
 export function App() {
@@ -26,7 +35,11 @@ export function App() {
         </a>
         <span className="muted small">Synthetic data only</span>
       </header>
-      <main>{route.page === "cluster" ? <ClusterView key={route.clusterId} clusterId={route.clusterId} /> : <ReviewQueue />}</main>
+      <main>
+        {route.page === "cluster" && <ClusterView key={route.clusterId} clusterId={route.clusterId} />}
+        {route.page === "proposal" && <ProposalView key={route.proposalId} proposalId={route.proposalId} />}
+        {route.page === "queue" && <ReviewQueue />}
+      </main>
     </>
   );
 }

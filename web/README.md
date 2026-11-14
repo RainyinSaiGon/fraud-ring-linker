@@ -23,13 +23,19 @@ needs no CORS setup. Set `API_TARGET` to point it elsewhere.
 
 | URL | What it shows |
 |---|---|
-| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first |
+| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first, then open merge proposals ("Possible split rings") |
 | `#/clusters/c12` | **Cluster:** members, each link's rule and shared signals in plain words, the recommended action and why, the decision form, and the history |
+| `#/proposals/<id>` | **Merge proposal:** the accounts on each side, the new account and rule that link them, and Merge clusters / Keep apart |
 
 Design choices:
 - **Decisions need a name.** Both buttons stay disabled until the analyst types a
   name, because the audit log must say who decided. Once login exists (roadmap
   Stage 8), the name will come from the signed-in user instead.
+- **Split rings wait for a person.** Streaming never merges two clusters by itself.
+  When a new account links strongly to two, the page lists the pair, and an
+  analyst merges them or keeps them apart. Merging needs a name like any decision,
+  and a refusal (for example, a verified-distinct pair on the two sides) is shown
+  with the service's reason.
 - **Actions are shown in colour and words,** so the page never relies on colour alone.
 - **Errors use the service's own message,** for example "Cluster c9 not found."
   or "Linking is temporarily unavailable."

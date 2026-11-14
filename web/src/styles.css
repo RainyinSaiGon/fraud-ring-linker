@@ -5,6 +5,9 @@
   --muted: #5b6270;
   --border: #dde1e7;
   --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --neutral-bg: #e9ecf1;
+  --neutral-text: #343a46;
   --danger: #b42318;
   --danger-text: #ffffff;
   --allow-bg: #e3f4e8;
@@ -28,6 +31,9 @@
     --muted: #a1a8b5;
     --border: #2e333c;
     --accent: #7aa7ff;
+    --accent-text: #0d1a33;
+    --neutral-bg: #2a2f38;
+    --neutral-text: #d3d8e0;
     --danger: #e5484d;
     --allow-bg: #13361f;
     --allow-text: #8ee0a8;
@@ -181,6 +187,11 @@ th {
   color: var(--review-text);
 }
 
+.badge-neutral {
+  background: var(--neutral-bg);
+  color: var(--neutral-text);
+}
+
 .badge-restrict {
   background: var(--restrict-bg);
   color: var(--restrict-text);
@@ -204,6 +215,11 @@ th {
   background: var(--surface);
   color: var(--text);
   border-color: var(--border);
+}
+
+.button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 .button.danger {
@@ -371,4 +387,14 @@ textarea {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.proposals {
+  margin-top: 32px;
+}
+
+.pair {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
