@@ -59,7 +59,8 @@ joined, best first, each with its score and rule.
 ## Cost mode
 
 Scores a labelled dataset (for example one exported by `tools/simulator`) in
-batch and in stream mode, and prices the mistakes:
+batch mode, stream mode, and stream mode with every merge proposal accepted, and
+prices the mistakes:
 
 ```bash
 java -jar engine/build/libs/fraud-ring-linker.jar cost \
@@ -67,23 +68,30 @@ java -jar engine/build/libs/fraud-ring-linker.jar cost \
   [--wrong-link-cost 50] [--missed-ring-cost 2000] [--format text|json] [--write-clusters DIR]
 ```
 
+Part of the output for simulator seed 3:
+
 ```text
 Costs: $50 per wrongly linked account, $2,000 per missed ring
 
-                                          batch       stream
-Fraud rings fully linked                  8 / 8        7 / 8
-Multi-account actors split                    0            1
-Wrongly linked accounts                       0            0
-Cost                                         $0       $2,000
+                                          batch       stream     stream + proposals
+Fraud rings fully linked                  8 / 8        7 / 8                  8 / 8
+Multi-account actors split                    0            1                      0
+Wrongly linked accounts                       0            0                      0
+Cost                                         $0       $2,000                     $0
+
+Merge proposals opened: 1 (1 merged when accepted)
 ```
 
 - **Batch** links everything at once. **Stream** starts empty and adds accounts
   one by one in file order, the way the REST service does.
+- **Stream + proposals** is the same stream, but each merge proposal is accepted
+  the moment it opens. It is the best case for analyst-reviewed merges, and the
+  proposal count is the review workload.
 - Metrics and costs use the same definitions as the Go evaluator
   (`go/internal/evaluation`); `Cost` is its general proxy, `Cost, fraud-list view` its literal proxy.
 - With a versioned `truth.json`, wrongly linked accounts are also broken down by
   population (customer, household member, office worker).
-- `--write-clusters DIR` saves both clusterings, for example to score them with the Go evaluator.
+- `--write-clusters DIR` saves all three clusterings, for example to score them with the Go evaluator.
 
 ## Sweep mode
 
@@ -96,7 +104,8 @@ java -jar engine/build/libs/fraud-ring-linker.jar sweep --datasets out/seed-1,ou
 ```
 
 - It prints a grid of mistakes (wrongly linked accounts / multi-account actors
-  split) for every setting, then the cheapest setting at each price pair.
+  split) for every setting, a second grid for stream + proposals (adding the
+  number of proposals opened), then the cheapest setting at each price pair.
 - The current setting is always in the grid, and wins ties, so a tie never
   suggests a change.
 - `tools/cost-sweep/sweep.sh [seedCount]` exports simulator seeds and runs the

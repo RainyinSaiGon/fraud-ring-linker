@@ -3,6 +3,7 @@ package io.github.rainyinsaigon.fraudlinker.evaluation;
 import io.github.rainyinsaigon.fraudlinker.LinkerException;
 import io.github.rainyinsaigon.fraudlinker.clustering.ClusteringConfig;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
+import io.github.rainyinsaigon.fraudlinker.domain.Constraint;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -97,5 +98,31 @@ class TruthAndCostReportTest {
         assertThat(result.stream().wronglyLinkedAccounts()).isZero();
         assertThat(result.batchClusters().clusters()).hasSize(2);
         assertThat(result.streamClusters().clusters()).hasSize(3);
+
+        // r3 proposes merging the cluster it did not join; accepting it recovers the ring.
+        assertThat(result.proposals()).isEqualTo(1);
+        assertThat(result.proposalsMerged()).isEqualTo(1);
+        assertThat(result.streamWithProposals().fullyRecoveredFraudRings()).isEqualTo(1);
+        assertThat(result.streamWithProposals().cost()).isZero();
+        assertThat(result.streamWithProposalsClusters().clusters()).hasSize(2);
+    }
+
+    @Test
+    void aProposalThatWouldJoinVerifiedDistinctAccountsIsNotMerged() {
+        // r4 links both r1 (phone) and r2 (card), but a constraint says r1 and r2 are different people,
+        // so r4 joins one of them and no proposal is opened at all.
+        List<Account> accounts = List.of(
+                account("r1", "maria.lopez@x.com", "phone-1", "10.1.0.1", "", T0),
+                account("r2", "zz.other@y.com", "", "10.2.0.1", "card-1", T0.plusSeconds(60)),
+                account("r4", "maria.lopes@x.com", "phone-1", "10.3.0.1", "card-1", T0.plusSeconds(120)));
+        Truth truth = new Truth(Map.of("r1", "p1", "r2", "p2", "r4", "p1"), java.util.Set.of(),
+                Map.of("p1", "customer", "p2", "customer"));
+        List<Constraint> constraints = List.of(new Constraint("r1", "r2", "verified_distinct"));
+
+        CostReport.Result result = CostReport.run(accounts, constraints, truth, ClusteringConfig.defaults(),
+                CostModel.DEFAULT);
+
+        assertThat(result.proposals()).isZero();
+        assertThat(result.streamWithProposalsClusters()).isEqualTo(result.streamClusters());
     }
 }

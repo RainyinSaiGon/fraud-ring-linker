@@ -26,8 +26,9 @@ import java.util.TreeSet;
 import java.util.function.Function;
 
 /**
- * {@code cost}: links a labelled dataset in batch and in stream mode, and reports
- * what each mode's mistakes cost against the ground truth.
+ * {@code cost}: links a labelled dataset in batch mode, in stream mode, and in
+ * stream mode with every merge proposal accepted, and reports what each mode's
+ * mistakes cost against the ground truth.
  *
  * <pre>
  * linker cost --accounts A --constraints C --truth T
@@ -91,6 +92,8 @@ final class CostCommand {
             Files.createDirectories(dir);
             Files.writeString(dir.resolve("batch-clusters.json"), JsonOutput.clusters(result.batchClusters()));
             Files.writeString(dir.resolve("stream-clusters.json"), JsonOutput.clusters(result.streamClusters()));
+            Files.writeString(dir.resolve("stream-with-proposals-clusters.json"),
+                    JsonOutput.clusters(result.streamWithProposalsClusters()));
         } catch (IOException e) {
             throw new LinkerException("write clusters to \"" + dir + "\": " + e.getMessage(), e);
         }
@@ -105,6 +108,8 @@ final class CostCommand {
         body.put("costs", Map.of("wrong_link", costs.wrongLinkCost(), "missed_ring", costs.missedRingCost()));
         body.put("batch", result.batch());
         body.put("stream", result.stream());
+        body.put("stream_with_proposals", result.streamWithProposals());
+        body.put("merge_proposals", Map.of("opened", result.proposals(), "merged", result.proposalsMerged()));
         try {
             return mapper.writeValueAsString(body) + "\n";
         } catch (IOException e) {
@@ -115,31 +120,35 @@ final class CostCommand {
     private static String text(CostModel costs, CostReport.Result result) {
         Metrics batch = result.batch();
         Metrics stream = result.stream();
+        Metrics proposals = result.streamWithProposals();
         StringBuilder out = new StringBuilder();
         out.append(String.format(Locale.ROOT, "Costs: $%,d per wrongly linked account, $%,d per missed ring%n%n",
                 costs.wrongLinkCost(), costs.missedRingCost()));
-        out.append(String.format(Locale.ROOT, "%-34s %12s %12s%n", "", "batch", "stream"));
-        row(out, "Accounts", batch, stream, m -> String.valueOf(m.accountCount()));
-        row(out, "Clusters", batch, stream, m -> String.valueOf(m.clusterCount()));
-        row(out, "Largest cluster", batch, stream, m -> String.valueOf(m.largestCluster()));
-        row(out, "Fraud rings fully linked", batch, stream,
-                m -> m.fullyRecoveredFraudRings() + " / " + m.fraudRingCount());
-        row(out, "Multi-account actors split", batch, stream, m -> String.valueOf(m.splitMultiAccountActors()));
-        row(out, "Wrongly linked accounts", batch, stream, m -> String.valueOf(m.wronglyLinkedAccounts()));
-        Set<String> kinds = new TreeSet<>(batch.wronglyLinkedByKind().keySet());
-        kinds.addAll(stream.wronglyLinkedByKind().keySet());
+        List<Metrics> modes = List.of(batch, stream, proposals);
+        out.append(String.format(Locale.ROOT, "%-34s %12s %12s %22s%n", "", "batch", "stream",
+                "stream + proposals"));
+        row(out, "Accounts", modes, m -> String.valueOf(m.accountCount()));
+        row(out, "Clusters", modes, m -> String.valueOf(m.clusterCount()));
+        row(out, "Largest cluster", modes, m -> String.valueOf(m.largestCluster()));
+        row(out, "Fraud rings fully linked", modes, m -> m.fullyRecoveredFraudRings() + " / " + m.fraudRingCount());
+        row(out, "Multi-account actors split", modes, m -> String.valueOf(m.splitMultiAccountActors()));
+        row(out, "Wrongly linked accounts", modes, m -> String.valueOf(m.wronglyLinkedAccounts()));
+        Set<String> kinds = new TreeSet<>();
+        modes.forEach(m -> kinds.addAll(m.wronglyLinkedByKind().keySet()));
         for (String kind : kinds) {
-            row(out, "  " + kind, batch, stream, m -> String.valueOf(m.wronglyLinkedByKind().getOrDefault(kind, 0L)));
+            row(out, "  " + kind, modes, m -> String.valueOf(m.wronglyLinkedByKind().getOrDefault(kind, 0L)));
         }
-        row(out, "Pair precision", batch, stream, m -> String.format(Locale.ROOT, "%.4f", m.pairPrecision()));
-        row(out, "Pair recall", batch, stream, m -> String.format(Locale.ROOT, "%.4f", m.pairRecall()));
-        row(out, "Cost", batch, stream, m -> String.format(Locale.ROOT, "$%,d", m.cost()));
-        row(out, "Cost, fraud-list view", batch, stream, m -> String.format(Locale.ROOT, "$%,d", m.fraudListCost()));
+        row(out, "Pair precision", modes, m -> String.format(Locale.ROOT, "%.4f", m.pairPrecision()));
+        row(out, "Pair recall", modes, m -> String.format(Locale.ROOT, "%.4f", m.pairRecall()));
+        row(out, "Cost", modes, m -> String.format(Locale.ROOT, "$%,d", m.cost()));
+        row(out, "Cost, fraud-list view", modes, m -> String.format(Locale.ROOT, "$%,d", m.fraudListCost()));
+        out.append(String.format(Locale.ROOT, "%nMerge proposals opened: %d (%d merged when accepted)%n",
+                result.proposals(), result.proposalsMerged()));
         return out.toString();
     }
 
-    private static void row(StringBuilder out, String label, Metrics batch, Metrics stream,
-                            Function<Metrics, String> value) {
-        out.append(String.format(Locale.ROOT, "%-34s %12s %12s%n", label, value.apply(batch), value.apply(stream)));
+    private static void row(StringBuilder out, String label, List<Metrics> modes, Function<Metrics, String> value) {
+        out.append(String.format(Locale.ROOT, "%-34s %12s %12s %22s%n", label, value.apply(modes.get(0)),
+                value.apply(modes.get(1)), value.apply(modes.get(2))));
     }
 }
