@@ -41,6 +41,21 @@ writes (and flushes) one line per account:
 
 Errors go to stderr only, and the exit code is 1.
 
+### Merge candidates
+
+Streaming never merges two existing clusters, so a ring whose members arrive in
+an unlucky order stays split. For callers that can ask a person (the REST
+service), `StreamLinker.assignWithCandidates` returns the same assignment plus
+**merge candidates**: the other existing clusters the account would also have
+joined, best first, each with its score and rule.
+
+- A candidate is listed only if merging it with the assigned cluster keeps every
+  verified-distinct pair apart.
+- Nothing is merged automatically. `LinkState.mergeClusters(a, b, confidence)`
+  merges two clusters after a review, keeps the older cluster ID, and refuses
+  (changing nothing) if a verified-distinct pair would end up together.
+- The CLI output is unchanged, so it stays byte-identical with the Go version.
+
 ## Cost mode
 
 Scores a labelled dataset (for example one exported by `tools/simulator`) in
