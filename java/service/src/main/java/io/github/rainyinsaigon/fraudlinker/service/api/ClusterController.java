@@ -39,6 +39,16 @@ public class ClusterController {
         this.properties = properties;
     }
 
+    /** The review queue: linked clusters that still need an analyst's decision. */
+    @GetMapping
+    public List<ApiModels.ClusterSummaryResponse> reviewQueue(
+            @RequestParam(defaultValue = "50") @Min(1) @Max(500) int limit) {
+        return clusters.reviewQueue(limit).stream()
+                .map(item -> new ApiModels.ClusterSummaryResponse(item.clusterId(), item.size(), item.confidence(),
+                        item.risk().action(), item.risk().reason()))
+                .toList();
+    }
+
     /** Members, recommended action, and which evidence links them. */
     @GetMapping("/{clusterId}")
     public ClusterResponse explain(@PathVariable @Pattern(regexp = CLUSTER_ID_PATTERN) String clusterId) {

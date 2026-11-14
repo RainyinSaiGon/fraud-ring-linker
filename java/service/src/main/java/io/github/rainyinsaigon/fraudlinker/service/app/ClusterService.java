@@ -2,7 +2,9 @@ package io.github.rainyinsaigon.fraudlinker.service.app;
 
 import io.github.rainyinsaigon.fraudlinker.clustering.ClusterExplainer;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
+import io.github.rainyinsaigon.fraudlinker.domain.Cluster;
 import io.github.rainyinsaigon.fraudlinker.service.LinkerProperties;
+import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
 import io.github.rainyinsaigon.fraudlinker.service.engine.LinkerEngine;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.AuditRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepository;
@@ -14,6 +16,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +67,36 @@ public class ClusterService {
                 throw notFound(clusterId);
             }
             return decisions.findCovering(members, limit);
+        });
+    }
+
+    public record QueueItem(String clusterId, int size, double confidence, RiskAssessment risk) {
+    }
+
+    /**
+     * Clusters an analyst should look at: two or more accounts and a REVIEW
+     * action. Largest first, then oldest cluster number.
+     *
+     * <p>Checks every multi-account cluster's decisions one by one, which is fine
+     * at demo scale. A production queue would be maintained incrementally.
+     */
+    public List<QueueItem> reviewQueue(int limit) {
+        return engine.withLock(session -> {
+            LinkState state = session.state();
+            List<QueueItem> items = new ArrayList<>();
+            for (Cluster cluster : state.clusters().clusters()) {
+                List<String> members = cluster.accountIds();
+                if (members.size() < 2) {
+                    continue;
+                }
+                RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
+                if (risk.action() == RiskAction.REVIEW) {
+                    items.add(new QueueItem(cluster.clusterId(), members.size(), cluster.confidence(), risk));
+                }
+            }
+            items.sort(Comparator.comparingInt(QueueItem::size).reversed()
+                    .thenComparingInt(item -> LinkState.clusterNumber(item.clusterId())));
+            return List.copyOf(items.subList(0, Math.min(limit, items.size())));
         });
     }
 
