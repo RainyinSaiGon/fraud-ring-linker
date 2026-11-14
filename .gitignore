@@ -1,5 +1,14 @@
+# Build output
 bin/
 clusters.json
 *.exe
-java/**/target/
-java/target/
+target/
+dist/
+
+# Installed dependencies
+node_modules/
+
+# Test output
+test-results/
+playwright-report/
+tools/simulator/out/

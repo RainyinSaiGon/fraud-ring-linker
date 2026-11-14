@@ -9,6 +9,28 @@ permissions:
   contents: read
 
 jobs:
+  hygiene:
+    name: No generated files committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject dependencies, build output and large files
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)(node_modules|dist|target|test-results|playwright-report)/' || true)
+          if [ -n "$bad" ]; then
+            echo "These generated files are committed; remove them and check .gitignore:"
+            echo "$bad" | head -20
+            echo "($(echo "$bad" | wc -l) files in total)"
+            exit 1
+          fi
+          large=$(git ls-files -z | xargs -0 du -k 2>/dev/null | awk '$1 > 2048 {print $2" ("$1" KB)"}')
+          if [ -n "$large" ]; then
+            echo "Files over 2 MB are committed:"
+            echo "$large"
+            exit 1
+          fi
+          echo "No generated or oversized files tracked."
+
   java:
     name: Java tests
     runs-on: ubuntu-latest
