@@ -18,8 +18,8 @@ trap 'rm -rf "$work"' EXIT
 echo "Building Go linker..."
 (cd "$root/go" && go build -o "$work/go-linker" ./cmd/linker)
 echo "Building Java linker..."
-(cd "$root/java" && mvn -q -B -DskipTests package)
-java_jar="$root/java/target/fraud-ring-linker.jar"
+(cd "$root/java" && mvn -q -B -DskipTests -pl engine -am package)
+java_jar="$root/java/engine/target/fraud-ring-linker.jar"
 
 failures=0
 for seed in $(seq 1 "$seeds"); do

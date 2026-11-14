@@ -33,7 +33,8 @@ The reasoning, trade-offs and operating point are in
 
 | Folder | What it is |
 |---|---|
-| [`java/`](java/) | Java 21 implementation (Maven). This is where new work happens. |
+| [`java/engine/`](java/engine/) | Java 21 engine and CLI (Maven). This is where new work happens. |
+| [`java/service/`](java/service/) | Spring Boot REST service: live linking, cluster explanations, analyst decisions, audit log. |
 | [`go/`](go/) | The original Go implementation, kept as the reference. |
 | [`tools/parity/`](tools/parity/) | Synthetic data generator (Node) and a script that checks Go and Java give byte-identical output. |
 
@@ -42,15 +43,27 @@ The reasoning, trade-offs and operating point are in
 ```bash
 cd java
 mvn verify
-java -jar target/fraud-ring-linker.jar link \
+# Command line
+java -jar engine/target/fraud-ring-linker.jar link \
   --accounts accounts.jsonl --constraints constraints.jsonl --output clusters.json
+# REST service, no database setup needed
+java -jar service/target/fraud-ring-linker-service.jar --spring.profiles.active=h2
 ```
 
-See [java/README.md](java/README.md) for input formats and stream mode.
+See [java/README.md](java/README.md) for the API, risk actions and design
+decisions, and [java/engine/README.md](java/engine/README.md) for input formats.
+
+## What happens to a linked account
+
+The service turns clusters into an action: `ALLOW`, `REVIEW` or `RESTRICT`.
+It never restricts on the engine's say-so alone: an analyst confirms a ring
+first. From then on, any new account that links to that ring is restricted
+the moment it signs up.
 
 ## Testing
 
-- **Unit and contract tests:** `mvn verify` in `java/`, `go test -race ./...` in `go/`.
+- **Unit, web and integration tests:** `mvn verify` in `java/`, `go test -race ./...` in `go/`.
+  Service tests run the same API scenarios on H2 and on real PostgreSQL (Testcontainers).
 - **Parity:** `tools/parity/parity.sh` generates messy synthetic datasets and
   checks both implementations agree byte for byte, in batch and stream mode.
 - **CI:** GitHub Actions runs all three on every push and pull request.

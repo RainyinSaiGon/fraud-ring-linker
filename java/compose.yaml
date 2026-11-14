@@ -1,0 +1,10 @@
+# Local PostgreSQL for the service. Development only: the password is not a secret.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fraudlinker
+      POSTGRES_USER: fraudlinker
+      POSTGRES_PASSWORD: fraudlinker
+    ports:
+      - "5432:5432"
