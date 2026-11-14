@@ -76,6 +76,7 @@ public final class LinkerCli {
         switch (args[0]) {
             case "link" -> runLink(rest);
             case "stream" -> runStream(rest, stdin, stdout);
+            case "cost" -> writeOut(stdout, CostCommand.run(parseFlags(rest, CostCommand.FLAGS)));
             case "help", "-h", "--help" -> printUsage(new PrintStream(stdout, true, StandardCharsets.UTF_8));
             default -> {
                 printUsage(stderr);
@@ -163,6 +164,15 @@ public final class LinkerCli {
         return values;
     }
 
+    private static void writeOut(OutputStream stdout, String text) {
+        try {
+            stdout.write(text.getBytes(StandardCharsets.UTF_8));
+            stdout.flush();
+        } catch (IOException e) {
+            throw new LinkerException("write output: " + e.getMessage(), e);
+        }
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.isEmpty();
     }
@@ -171,5 +181,7 @@ public final class LinkerCli {
         out.println("Usage:");
         out.println("  linker link --accounts <accounts.jsonl> --constraints <constraints.jsonl> --output <clusters.json>");
         out.println("  linker stream --accounts <accounts.jsonl> --constraints <constraints.jsonl>");
+        out.println("  linker cost --accounts <accounts.jsonl> --constraints <constraints.jsonl> --truth <truth.json>");
+        out.println("              [--wrong-link-cost 50] [--missed-ring-cost 2000] [--format text|json] [--write-clusters DIR]");
     }
 }
