@@ -1,0 +1,15 @@
+{
+  "name": "fraud-ring-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sends realistic synthetic sign-up traffic to the fraud-ring-linker service and scores the result against planted rings.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "simulate": "node src/cli.mjs run",
+    "extra-ring-member": "node src/cli.mjs extra"
+  }
+}
