@@ -68,6 +68,8 @@ java -jar engine/build/libs/fraud-ring-linker.jar cost \
   [--wrong-link-cost 50] [--missed-ring-cost 2000] [--format text|json] [--write-clusters DIR]
 ```
 
+Part of the output for simulator seed 3:
+
 ```text
 Costs: $50 per wrongly linked account, $2,000 per missed ring
 
