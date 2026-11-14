@@ -86,9 +86,12 @@ jobs:
       - name: Check the Gradle wrapper is the official one
         uses: gradle/actions/wrapper-validation@v4
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build and test modules already on Gradle
+      - name: Build, test and check coverage floors
         working-directory: java
         run: ./gradlew build
+      - name: Mutation testing
+        working-directory: java
+        run: ./gradlew :engine:pitest
 
   go:
     name: Go tests

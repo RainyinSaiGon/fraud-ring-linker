@@ -9,6 +9,10 @@ spring-boot = "4.0.9"
 spring-dependency-management = "1.1.7"
 # Not managed by Spring Boot 4; 6.x is the current stable line.
 rest-assured = "6.3.0"
+# PIT itself, its JUnit 5 adapter, and the Gradle plugin that runs it.
+pit-engine = "1.30.2"
+pit-junit5 = "1.2.3"
+pitest-gradle-plugin = "1.19.0"
 
 [libraries]
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
@@ -35,4 +39,5 @@ rest-assured = { module = "io.rest-assured:rest-assured", version.ref = "rest-as
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+pitest = { id = "info.solidsoft.pitest", version.ref = "pitest-gradle-plugin" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
