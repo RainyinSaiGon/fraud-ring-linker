@@ -6,6 +6,7 @@ import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Assessment;
 import io.github.rainyinsaigon.fraudlinker.domain.Assignment;
 import io.github.rainyinsaigon.fraudlinker.domain.Features;
+import io.github.rainyinsaigon.fraudlinker.domain.MergeCandidate;
 import io.github.rainyinsaigon.fraudlinker.index.SignalStore;
 import io.github.rainyinsaigon.fraudlinker.normalize.Normalizer;
 import io.github.rainyinsaigon.fraudlinker.normalize.Text;
@@ -23,7 +24,9 @@ import java.util.Set;
 /**
  * Monotonic online assignment over a live {@link LinkState}. Each new account
  * either joins one existing cluster or starts a singleton. It never merges two
- * existing clusters, so earlier answers are never contradicted.
+ * existing clusters, so earlier answers are never contradicted. When the account
+ * also links strongly to other clusters, {@link #assignWithCandidates} reports
+ * them as merge candidates for a person to review.
  *
  * <p>Cost per event depends only on the new account's local candidates (bounded
  * by the index limits), not on the total number of accounts. Not thread-safe.
@@ -40,6 +43,14 @@ public final class StreamLinker {
 
     /** Evaluates one new account, then commits it to the state. */
     public Assignment assign(Account input) {
+        return assignWithCandidates(input).assignment();
+    }
+
+    /**
+     * Like {@link #assign}, and also returns the other existing clusters the
+     * account would have joined, best first. Nothing is merged.
+     */
+    public StreamResult assignWithCandidates(Account input) {
         Account account = input.withAccountId(Text.trimSpace(input.accountId()));
         if (account.accountId().isEmpty()) {
             throw new LinkerException("missing account_id");
@@ -107,14 +118,25 @@ public final class StreamLinker {
         }
 
         if (selected == null) {
-            return new Assignment(account.accountId(), state.newClusterId(newIndex), 1);
+            // Every option conflicts with this account, so merging any of them with it would too.
+            return new StreamResult(new Assignment(account.accountId(), state.newClusterId(newIndex), 1), List.of());
         }
 
         int selectedRoot = state.dsu().find(selected.root());
         String clusterId = state.clusterId(selectedRoot);
         int newRoot = state.dsu().union(selectedRoot, newIndex, selected.score());
         state.moveCluster(selectedRoot, newIndex, newRoot, clusterId, selected.identitySeed());
-        return new Assignment(account.accountId(), clusterId, Scorer.roundConfidence(selected.score()));
+
+        List<MergeCandidate> mergeCandidates = new ArrayList<>();
+        for (Option option : options) {
+            int root = state.dsu().find(option.root());
+            if (root != newRoot && state.dsu().canMerge(newRoot, root, store, state.constraints())) {
+                mergeCandidates.add(new MergeCandidate(state.clusterId(root), Scorer.roundConfidence(option.score()),
+                        option.assessment().rule()));
+            }
+        }
+        return new StreamResult(new Assignment(account.accountId(), clusterId, Scorer.roundConfidence(selected.score())),
+                mergeCandidates);
     }
 
     private static boolean better(Assessment left, Assessment right) {

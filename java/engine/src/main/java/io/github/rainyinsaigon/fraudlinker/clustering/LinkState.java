@@ -174,6 +174,49 @@ public final class LinkState {
         return ConstraintOutcome.ADDED;
     }
 
+    /** Outcome of merging two existing clusters. */
+    public enum MergeOutcome {
+        /** The clusters are now one, under the older (lower-numbered) cluster ID. */
+        MERGED,
+        /** Both IDs already name the same cluster. */
+        ALREADY_ONE_CLUSTER,
+        /** Nothing changed: the merge would put a verified-distinct pair in one cluster. */
+        CONFLICTS_WITH_CONSTRAINT
+    }
+
+    /**
+     * Merges two existing clusters, for example after an analyst accepts a merge
+     * proposal. The older cluster ID survives; the other ID stops existing.
+     *
+     * @param linkConfidence score of the link that justifies the merge; it can lower the cluster's confidence
+     * @throws LinkerException when either cluster ID is unknown
+     */
+    public MergeOutcome mergeClusters(String clusterA, String clusterB, double linkConfidence) {
+        Integer rootA = rootsByClusterId.get(clusterA);
+        Integer rootB = rootsByClusterId.get(clusterB);
+        if (rootA == null || rootB == null) {
+            throw new LinkerException("unknown cluster \"" + (rootA == null ? clusterA : clusterB) + "\"");
+        }
+        if (rootA.equals(rootB)) {
+            return MergeOutcome.ALREADY_ONE_CLUSTER;
+        }
+        if (!dsu.canMerge(rootA, rootB, store, constraints)) {
+            return MergeOutcome.CONFLICTS_WITH_CONSTRAINT;
+        }
+        String kept = clusterNumber(clusterA) <= clusterNumber(clusterB) ? clusterA : clusterB;
+        String dropped = kept.equals(clusterA) ? clusterB : clusterA;
+        boolean seed = identitySeedRoots.remove(rootA) | identitySeedRoots.remove(rootB);
+        clusterIds.remove(rootA);
+        clusterIds.remove(rootB);
+        rootsByClusterId.remove(dropped);
+        int newRoot = dsu.union(rootA, rootB, linkConfidence);
+        putClusterId(newRoot, kept);
+        if (seed) {
+            identitySeedRoots.add(newRoot);
+        }
+        return MergeOutcome.MERGED;
+    }
+
     /** The complete current partition, ordered by cluster number, members sorted. */
     public ClustersOutput clusters() {
         List<Component> components = components();
