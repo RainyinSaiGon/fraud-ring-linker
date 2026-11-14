@@ -62,6 +62,11 @@ public final class LinkState {
         return clusterIds.get(root);
     }
 
+    /** Number of clusters; it drops by one on every merge, so callers can detect a merge cheaply. */
+    public int clusterCount() {
+        return rootsByClusterId.size();
+    }
+
     public boolean isIdentitySeedRoot(int root) {
         return identitySeedRoots.contains(root);
     }

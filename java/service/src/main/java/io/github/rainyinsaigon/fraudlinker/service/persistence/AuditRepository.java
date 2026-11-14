@@ -19,6 +19,9 @@ public class AuditRepository {
     public static final String ACCOUNT_LINKED = "account.linked";
     public static final String DECISION_RECORDED = "decision.recorded";
     public static final String CONSTRAINT_ADDED = "constraint.added";
+    public static final String MERGE_PROPOSED = "merge.proposed";
+    public static final String MERGE_ACCEPTED = "merge.accepted";
+    public static final String MERGE_REJECTED = "merge.rejected";
 
     /** Actor for automated decisions made by the engine. */
     public static final String SYSTEM = "system";

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -42,6 +43,9 @@ abstract class ApiScenarios {
 
     @Autowired
     LinkerEngine engine;
+
+    @Autowired
+    JdbcClient jdbc;
 
     /** Unique per test, so tests never link to each other's accounts. */
     String run;
@@ -266,5 +270,158 @@ abstract class ApiScenarios {
         given().get("/api/v1/clusters/{id}", clusterId).then().body("size", equalTo(ringSize));
         given().queryParam("cluster_id", clusterId).queryParam("limit", 100).get("/api/v1/audit-events").then()
                 .body("findAll { it.event_type == 'account.linked' }", hasSize(ringSize));
+    }
+
+    /**
+     * A ring split by arrival order: r1 and r3 share a phone and near-identical emails,
+     * r2 and r3 share a card. r1 and r2 start separate clusters; r3 joins one, and
+     * the other is proposed for merging.
+     *
+     * @return the ID of the proposal opened by r3
+     */
+    String registerSplitRing() {
+        String phone = "phone_" + run;
+        String card = "card_" + run;
+        register(id("r1"), "maria.lopez." + run + "@x.com", phone, null).statusCode(201)
+                .body("merge_proposal_ids", hasSize(0));
+        register(id("r2"), "zz.other." + run + "@y.com", null, card).statusCode(201)
+                .body("merge_proposal_ids", hasSize(0));
+        return register(id("r3"), "maria.lopes." + run + "@x.com", phone, card).statusCode(201)
+                .body("merge_proposal_ids", hasSize(1))
+                .extract().path("merge_proposal_ids[0]");
+    }
+
+    ValidatableResponse register(String accountId, String email, String device, String payment) {
+        return given().contentType(ContentType.JSON)
+                .body(accountJson(accountId, email, device, isolatedIp(), payment))
+                .post("/api/v1/accounts")
+                .then();
+    }
+
+    ValidatableResponse decideProposal(String proposalId, String decision) {
+        return given().contentType(ContentType.JSON)
+                .body("{\"analyst\":\"analyst-" + run + "\",\"note\":\"same ring\"}")
+                .post("/api/v1/merge-proposals/{id}/" + decision, proposalId)
+                .then();
+    }
+
+    String clusterOf(String accountId) {
+        return given().get("/api/v1/accounts/{id}", accountId).then().statusCode(200).extract().path("cluster_id");
+    }
+
+    static String find(String proposalId) {
+        return "find { it.proposal_id == '" + proposalId + "' }";
+    }
+
+    @Test
+    void aRingSplitByArrivalOrderIsProposedAndAnAcceptedMergeRecoversIt() {
+        String proposalId = registerSplitRing();
+        assertThat(clusterOf(id("r1"))).isNotEqualTo(clusterOf(id("r2")));
+
+        given().queryParam("limit", 500).get("/api/v1/merge-proposals").then()
+                .statusCode(200)
+                .body(find(proposalId) + ".status", equalTo("OPEN"))
+                .body(find(proposalId) + ".trigger_account_id", equalTo(id("r3")))
+                .body(find(proposalId) + ".rule", org.hamcrest.Matchers.not(org.hamcrest.Matchers.emptyString()));
+
+        decideProposal(proposalId, "accept").statusCode(200)
+                .body("merged", equalTo(true))
+                .body("cluster_size", equalTo(3))
+                .body("risk_action", equalTo("REVIEW"))
+                .body("proposal.status", equalTo("ACCEPTED"))
+                .body("proposal.decided_by", equalTo("analyst-" + run))
+                .body("proposal.note", equalTo("same ring"));
+
+        String cluster = clusterOf(id("r1"));
+        assertThat(clusterOf(id("r2"))).isEqualTo(cluster);
+        given().get("/api/v1/clusters/{id}", cluster).then()
+                .body("account_ids", containsInAnyOrder(id("r1"), id("r2"), id("r3")));
+        given().queryParam("cluster_id", cluster).get("/api/v1/audit-events").then()
+                .body("find { it.event_type == 'merge.accepted' }.actor", equalTo("analyst-" + run));
+
+        // A decision is final.
+        decideProposal(proposalId, "accept").statusCode(409);
+        decideProposal(proposalId, "reject").statusCode(409);
+        given().queryParam("status", "ACCEPTED").queryParam("limit", 500).get("/api/v1/merge-proposals").then()
+                .body(find(proposalId) + ".current_cluster_a", equalTo(cluster))
+                .body(find(proposalId) + ".current_cluster_b", equalTo(cluster));
+
+        // New ring members now land in the merged cluster, with nothing left to propose.
+        register(id("r4"), "zz.other2." + run + "@y.com", null, "card_" + run).statusCode(201)
+                .body("cluster_id", equalTo(cluster))
+                .body("merge_proposal_ids", hasSize(0));
+    }
+
+    @Test
+    void aRejectedProposalKeepsTheClustersApartAndIsNotProposedAgain() {
+        String proposalId = registerSplitRing();
+
+        decideProposal(proposalId, "reject").statusCode(200).body("status", equalTo("REJECTED"));
+
+        assertThat(clusterOf(id("r1"))).isNotEqualTo(clusterOf(id("r2")));
+        // r5 links both clusters again, but an analyst already said no.
+        register(id("r5"), "maria.lopez." + run + "+2@x.com", "phone_" + run, "card_" + run).statusCode(201)
+                .body("merge_proposal_ids", hasSize(0));
+        decideProposal(proposalId, "accept").statusCode(409);
+    }
+
+    @Test
+    void acceptingIsRefusedWhenItWouldJoinVerifiedDistinctAccounts() {
+        String proposalId = registerSplitRing();
+        addConstraint(id("r1"), id("r2")).statusCode(201);
+
+        decideProposal(proposalId, "accept").statusCode(409)
+                .body("detail", startsWith("Merging these clusters would link accounts verified as different people"));
+
+        assertThat(clusterOf(id("r1"))).isNotEqualTo(clusterOf(id("r2")));
+        given().queryParam("limit", 500).get("/api/v1/merge-proposals").then()
+                .body(find(proposalId) + ".status", equalTo("OPEN"));
+        decideProposal(proposalId, "reject").statusCode(200);
+    }
+
+    @Test
+    void acceptedMergesAreReplayedWhenTheEngineRebuilds() {
+        // Two accounts with nothing in common: batch linking alone would never join them.
+        register(id("u1"), null, null).statusCode(201);
+        register(id("u2"), null, null).statusCode(201);
+        UUID proposalId = UUID.randomUUID();
+        jdbc.sql("""
+                        INSERT INTO merge_proposals (proposal_id, status, trigger_account_id, cluster_a, cluster_b,
+                                                     score, rule, proposed_at, decided_by, decided_at)
+                        VALUES (:id, 'ACCEPTED', :trigger, 'c1', 'c2', 0.9, 'test', CURRENT_TIMESTAMP, 'analyst',
+                                CURRENT_TIMESTAMP)
+                        """)
+                .param("id", proposalId)
+                .param("trigger", id("u2"))
+                .update();
+        insertProposalAccount(proposalId, "A", id("u1"));
+        insertProposalAccount(proposalId, "B", id("u2"));
+        assertThat(clusterOf(id("u1"))).isNotEqualTo(clusterOf(id("u2")));
+
+        // Same as a restart.
+        engine.withLock(session -> {
+            session.rebuildFromDatabase();
+            return null;
+        });
+
+        assertThat(clusterOf(id("u1"))).isEqualTo(clusterOf(id("u2")));
+    }
+
+    private void insertProposalAccount(UUID proposalId, String side, String accountId) {
+        jdbc.sql("INSERT INTO merge_proposal_accounts (proposal_id, side, account_id) VALUES (:id, :side, :account)")
+                .param("id", proposalId)
+                .param("side", side)
+                .param("account", accountId)
+                .update();
+    }
+
+    @Test
+    void badProposalRequestsAreReportedClearly() {
+        decideProposal(UUID.randomUUID().toString(), "accept").statusCode(404);
+        decideProposal("not-a-uuid", "accept").statusCode(400);
+        given().queryParam("status", "MAYBE").get("/api/v1/merge-proposals").then().statusCode(400);
+        given().queryParam("limit", 0).get("/api/v1/merge-proposals").then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"analyst\":\" \"}")
+                .post("/api/v1/merge-proposals/{id}/reject", UUID.randomUUID()).then().statusCode(400);
     }
 }

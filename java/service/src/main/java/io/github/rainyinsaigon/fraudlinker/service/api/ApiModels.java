@@ -1,6 +1,8 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
+import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposal;
+import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposalService;
 import io.github.rainyinsaigon.fraudlinker.service.risk.AnalystDecision;
 import io.github.rainyinsaigon.fraudlinker.service.risk.Outcome;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
@@ -45,13 +47,15 @@ public final class ApiModels {
         }
     }
 
+    /** @param mergeProposalIds proposals opened because the account also linked other clusters */
     public record AccountLinkResponse(
             String accountId,
             String clusterId,
             double confidence,
             int clusterSize,
             RiskAction riskAction,
-            String reason) {
+            String reason,
+            List<UUID> mergeProposalIds) {
     }
 
     public record AccountResponse(
@@ -118,6 +122,44 @@ public final class ApiModels {
     }
 
     public record ConstraintResponse(String accountA, String accountB, String relation, String status) {
+    }
+
+    public record MergeDecisionRequest(
+            @NotBlank @Size(max = 128) String analyst,
+            @Size(max = 2000) String note) {
+    }
+
+    /**
+     * @param clusterA        cluster ID of side A when proposed
+     * @param currentClusterA the cluster side A is in now (IDs can change on a rebuild)
+     */
+    public record MergeProposalResponse(
+            UUID proposalId,
+            MergeProposal.Status status,
+            String triggerAccountId,
+            double score,
+            String rule,
+            Instant proposedAt,
+            String clusterA,
+            String clusterB,
+            String currentClusterA,
+            String currentClusterB,
+            List<String> accountIdsA,
+            List<String> accountIdsB,
+            String decidedBy,
+            String note,
+            Instant decidedAt) {
+
+        static MergeProposalResponse of(MergeProposalService.ProposalView view) {
+            MergeProposal p = view.proposal();
+            return new MergeProposalResponse(p.proposalId(), p.status(), p.triggerAccountId(), p.score(), p.rule(),
+                    p.proposedAt(), p.clusterA(), p.clusterB(), view.currentClusterA(), view.currentClusterB(),
+                    p.accountsA(), p.accountsB(), p.decidedBy(), p.note(), p.decidedAt());
+        }
+    }
+
+    public record MergeAcceptResponse(MergeProposalResponse proposal, boolean merged, String clusterId,
+                                      int clusterSize, RiskAction riskAction, String reason) {
     }
 
     public record AuditEventResponse(

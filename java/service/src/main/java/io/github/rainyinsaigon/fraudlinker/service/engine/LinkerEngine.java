@@ -4,16 +4,20 @@ import io.github.rainyinsaigon.fraudlinker.clustering.BatchLinker;
 import io.github.rainyinsaigon.fraudlinker.clustering.ClusteringConfig;
 import io.github.rainyinsaigon.fraudlinker.clustering.Constraints;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
+import io.github.rainyinsaigon.fraudlinker.clustering.LinkState.MergeOutcome;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Constraint;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.AccountRepository;
+import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposal;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.ConstraintRepository;
+import io.github.rainyinsaigon.fraudlinker.service.persistence.MergeProposalRepository;
 import io.github.rainyinsaigon.fraudlinker.streaming.StreamLinker;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -27,6 +31,10 @@ import java.util.function.Function;
  * rebuild itself fails (the database is down), the state is dropped and every
  * request gets {@link EngineUnavailableException} until a rebuild succeeds.
  *
+ * <p>A rebuild links all stored accounts in one batch, then replays every
+ * accepted merge proposal in the order it was accepted, so an analyst's merge
+ * survives a restart.
+ *
  * <p>One lock guards everything, including reads, because the engine is
  * single-threaded by design (union-find lookups compress paths, even on reads).
  * Engine work is microseconds per call; the database write inside the lock is
@@ -38,6 +46,7 @@ public class LinkerEngine {
 
     private final AccountRepository accounts;
     private final ConstraintRepository constraints;
+    private final MergeProposalRepository mergeProposals;
     private final ReentrantLock lock = new ReentrantLock();
 
     /** Guarded by {@link #lock}. Null while unavailable. */
@@ -45,9 +54,11 @@ public class LinkerEngine {
     /** Guarded by {@link #lock}. Null while unavailable. */
     private StreamLinker streamLinker;
 
-    public LinkerEngine(AccountRepository accounts, ConstraintRepository constraints) {
+    public LinkerEngine(AccountRepository accounts, ConstraintRepository constraints,
+                        MergeProposalRepository mergeProposals) {
         this.accounts = accounts;
         this.constraints = constraints;
+        this.mergeProposals = mergeProposals;
     }
 
     @PostConstruct
@@ -119,10 +130,21 @@ public class LinkerEngine {
             List<Account> stored = accounts.findAllInArrivalOrder();
             List<Constraint> pairs = constraints.findAll();
             LinkState rebuilt = BatchLinker.build(stored, Constraints.of(pairs), ClusteringConfig.defaults());
+            List<MergeProposal> accepted = mergeProposals.findAcceptedInDecisionOrder();
+            for (MergeProposal proposal : accepted) {
+                List<String> accountIds = new ArrayList<>(proposal.accountsA());
+                accountIds.addAll(proposal.accountsB());
+                if (ClusterMerger.mergeAccounts(rebuilt, accountIds, proposal.score())
+                        == MergeOutcome.CONFLICTS_WITH_CONSTRAINT) {
+                    // Cannot happen through the API: a constraint inside one cluster is refused.
+                    log.warn("Accepted merge proposal {} now conflicts with a constraint; not replayed",
+                            proposal.proposalId());
+                }
+            }
             state = rebuilt;
             streamLinker = new StreamLinker(rebuilt);
-            log.info("Linked {} accounts with {} verified-distinct pairs in {} ms",
-                    stored.size(), pairs.size(), (System.nanoTime() - start) / 1_000_000);
+            log.info("Linked {} accounts with {} verified-distinct pairs and {} accepted merges in {} ms",
+                    stored.size(), pairs.size(), accepted.size(), (System.nanoTime() - start) / 1_000_000);
         } catch (RuntimeException e) {
             state = null;
             streamLinker = null;

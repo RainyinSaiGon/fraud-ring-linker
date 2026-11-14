@@ -38,7 +38,8 @@ public class AccountController {
                 result.assignment().confidence(),
                 result.clusterSize(),
                 result.risk().action(),
-                result.risk().reason());
+                result.risk().reason(),
+                result.mergeProposals().stream().map(proposal -> proposal.proposalId()).toList());
         return ResponseEntity.created(URI.create("/api/v1/accounts/" + body.accountId()))
                 .body(body);
     }
