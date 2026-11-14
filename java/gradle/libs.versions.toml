@@ -1,5 +1,4 @@
 # Every dependency and plugin version in one place.
-# Versions match the Maven build exactly while both builds exist (epic #17).
 
 [versions]
 jackson = "2.18.2"

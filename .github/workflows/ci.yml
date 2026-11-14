@@ -14,13 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reject dependencies, build output and large files
+      - name: Reject dependencies, build output, Maven files and large files
         run: |
           bad=$(git ls-files | grep -E '(^|/)(node_modules|dist|target|build|\.gradle|test-results|playwright-report)/' || true)
           if [ -n "$bad" ]; then
             echo "These generated files are committed; remove them and check .gitignore:"
             echo "$bad" | head -20
             echo "($(echo "$bad" | wc -l) files in total)"
+            exit 1
+          fi
+          # The Java build is Gradle only (epic #17); a pom.xml would be a second, unmaintained build.
+          poms=$(git ls-files | grep -E '(^|/)pom\.xml$' || true)
+          if [ -n "$poms" ]; then
+            echo "Maven build files are committed, but the project builds with Gradle:"
+            echo "$poms"
             exit 1
           fi
           large=$(git ls-files -z | xargs -0 du -k 2>/dev/null | awk '$1 > 2048 {print $2" ("$1" KB)"}')

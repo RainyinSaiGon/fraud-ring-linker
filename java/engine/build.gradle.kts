@@ -6,7 +6,7 @@ plugins {
 
 description = "Constraint-aware, rarity-weighted linking of accounts controlled by the same fraud actor."
 
-// Same artifact name as Maven: fraud-ring-linker-engine-<version>.jar
+// Library jar: fraud-ring-linker-engine-<version>.jar
 base {
     archivesName = "fraud-ring-linker-engine"
 }
@@ -38,8 +38,7 @@ pitest {
 }
 
 // Runnable CLI jar with Jackson bundled, at build/libs/fraud-ring-linker.jar.
-// Replaces the Maven shade plugin; the plain module jar stays the library
-// artifact the service depends on.
+// The plain module jar stays the library artifact the service depends on.
 val cliJar = tasks.register<Jar>("cliJar") {
     group = "build"
     description = "Builds the runnable command-line jar with its dependencies."
