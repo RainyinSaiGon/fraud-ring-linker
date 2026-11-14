@@ -4,6 +4,8 @@ clusters.json
 *.exe
 target/
 dist/
+build/
+.gradle/
 
 # Installed dependencies
 node_modules/

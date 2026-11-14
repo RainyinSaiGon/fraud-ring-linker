@@ -11,6 +11,9 @@ Two Maven modules:
 mvn verify      # build both modules and run every test
 ```
 
+The build is moving to Gradle (epic #17). Modules already migrated also build with
+`./gradlew build`; the engine's CLI jar is then at `engine/build/libs/fraud-ring-linker.jar`.
+
 PostgreSQL tests use Testcontainers and need Docker. Without Docker they are
 skipped, and everything else still runs. CI always runs them.
 
