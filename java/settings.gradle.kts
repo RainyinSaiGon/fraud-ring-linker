@@ -1,3 +1,8 @@
+pluginManagement {
+    // Shared conventions for the modules (java/build-logic).
+    includeBuild("build-logic")
+}
+
 rootProject.name = "fraud-ring-linker"
 
 // Modules moved from Maven to Gradle one at a time (epic #17).

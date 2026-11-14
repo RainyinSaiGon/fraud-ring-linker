@@ -1,11 +1,9 @@
 plugins {
-    java
+    id("fraudlinker.java-conventions")
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
 }
 
-group = "io.github.rainyinsaigon"
-version = "0.2.0-SNAPSHOT"
 description = "REST service around the linking engine: live assignment, cluster explanations, analyst decisions and an audit log."
 
 dependencies {
@@ -28,21 +26,6 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.rest.assured)
     testRuntimeOnly(libs.junit.platform.launcher)
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    // Java 21 API, every lint warning fails the build: the same as the engine and the Maven build.
-    options.release = 21
-    options.encoding = "UTF-8"
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Werror", "-parameters"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("failed", "skipped")
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-    }
 }
 
 // Runnable Spring Boot jar with the same name as the Maven build:

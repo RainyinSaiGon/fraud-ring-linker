@@ -1,9 +1,9 @@
 plugins {
     `java-library`
+    id("fraudlinker.java-conventions")
+    alias(libs.plugins.pitest)
 }
 
-group = "io.github.rainyinsaigon"
-version = "0.2.0-SNAPSHOT"
 description = "Constraint-aware, rarity-weighted linking of accounts controlled by the same fraud actor."
 
 // Same artifact name as Maven: fraud-ring-linker-engine-<version>.jar
@@ -20,22 +20,21 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-tasks.withType<JavaCompile>().configureEach {
-    // Compile against the Java 21 API whatever JDK runs Gradle, exactly like Maven's
-    // maven.compiler.release=21. A toolchain would force a JDK 21 download on machines
-    // that only have a newer JDK; CI already runs the tests on JDK 21.
-    options.release = 21
-    options.encoding = "UTF-8"
-    // Same as the Maven build: every lint warning fails the build.
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Werror", "-parameters"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("failed")
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-    }
+// Mutation testing: `./gradlew :engine:pitest`.
+// PIT plants small bugs (flips a condition, removes a call) and checks that some
+// test fails. It is slow, so it is not part of `build`; CI runs it as its own job,
+// only on the packages where a silent bug would change a fraud decision.
+pitest {
+    pitestVersion = libs.versions.pit.engine.get()
+    junit5PluginVersion = libs.versions.pit.junit5.get()
+    targetClasses = setOf(
+        "io.github.rainyinsaigon.fraudlinker.scoring.*",
+        "io.github.rainyinsaigon.fraudlinker.clustering.*",
+    )
+    targetTests = setOf("io.github.rainyinsaigon.fraudlinker.*")
+    mutationThreshold = providers.gradleProperty("mutation.minimum").map { it.toInt() }
+    outputFormats = setOf("HTML", "XML")
+    timestampedReports = false
 }
 
 // Runnable CLI jar with Jackson bundled, at build/libs/fraud-ring-linker.jar.
