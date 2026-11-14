@@ -8,16 +8,16 @@ input, both produce byte-identical output (checked by
 ## Build
 
 ```bash
-mvn verify            # from java/: compile (warnings are errors), test, build jars
+./gradlew :engine:build   # from java/: compile (warnings are errors), test, build jars
 ```
 
-The runnable CLI jar is `engine/target/fraud-ring-linker.jar`, with Jackson
+The runnable CLI jar is `engine/build/libs/fraud-ring-linker.jar`, with Jackson
 bundled.
 
 ## Batch mode
 
 ```bash
-java -jar engine/target/fraud-ring-linker.jar link \
+java -jar engine/build/libs/fraud-ring-linker.jar link \
   --accounts accounts.jsonl --constraints constraints.jsonl --output clusters.json
 ```
 
@@ -28,7 +28,7 @@ same output.
 ## Stream mode
 
 ```bash
-java -jar engine/target/fraud-ring-linker.jar stream \
+java -jar engine/build/libs/fraud-ring-linker.jar stream \
   --accounts accounts.jsonl --constraints constraints.jsonl < new-accounts.jsonl
 ```
 
