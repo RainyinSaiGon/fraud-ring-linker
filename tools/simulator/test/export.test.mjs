@@ -53,6 +53,20 @@ describe("buildTruth", () => {
     assert.ok(customers.every((actor) => actor.account_ids.length === 1 && actor.group === undefined));
   });
 
+  it("lists the mule chains, every mule account, and the hard legitimate cases", () => {
+    assert.equal(truth.mule_chains.length, 2);
+    const fromChains = truth.mule_chains.flatMap((chain) => chain.account_ids).sort();
+    assert.deepEqual(truth.mule_account_ids, fromChains);
+    for (const chain of truth.mule_chains) {
+      assert.deepEqual(Object.keys(chain), ["chain_id", "account_ids", "victims", "cash_out"]);
+      // Mules are recruited customers: they keep their own actor.
+      for (const id of chain.account_ids) assert.equal(truth.account_to_actor[id], `person_${id}`);
+    }
+    assert.deepEqual([...new Set(truth.transfer_cases.map((c) => c.case))].sort(),
+      ["own_money", "payday_bills", "small_business"]);
+    assert.ok(truth.transfer_cases.every((c) => !truth.mule_account_ids.includes(c.account_id)));
+  });
+
   it("only uses the four known kinds", () => {
     const kinds = new Set(truth.actors.map((actor) => actor.kind));
     assert.deepEqual([...kinds].sort(), ["customer", "fraud_ring", "household_member", "office_worker"]);
@@ -63,7 +77,7 @@ describe("writeScenario", () => {
   it("writes byte-identical files for the same seed", () => {
     const first = writeScenario(buildScenario(options), tempDir());
     const second = writeScenario(buildScenario(options), tempDir());
-    for (const name of ["accounts", "constraints", "truth"]) {
+    for (const name of ["accounts", "constraints", "transfers", "truth"]) {
       assert.equal(readFileSync(first[name], "utf8"), readFileSync(second[name], "utf8"), name);
     }
   });
@@ -80,6 +94,24 @@ describe("writeScenario", () => {
     const paths = writeScenario(buildScenario(options), tempDir());
     assert.equal(readFileSync(paths.constraints, "utf8"), "");
     const truth = JSON.parse(readFileSync(paths.truth, "utf8"));
-    assert.equal(truth.schema_version, 1);
+    assert.equal(truth.schema_version, 2);
+  });
+
+  it("writes transfers as JSON lines, and an empty file when there are none", () => {
+    const scenario = buildScenario(options);
+    const paths = writeScenario(scenario, tempDir());
+    const lines = readFileSync(paths.transfers, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+    assert.ok(lines.length > 100);
+    assert.ok(lines.every((t) => t.amount_cents > 0 && t.transfer_id.startsWith("s5_t")));
+
+    const quiet = writeScenario(buildScenario({ ...options, customers: 0, households: 0, officeWorkers: 0 }),
+      tempDir(), { muleChains: 0, smallBusinesses: 0, ownMoney: 0, paydayBills: 0 });
+    assert.equal(readFileSync(quiet.transfers, "utf8"), "");
+  });
+
+  it("keeps the sign-ups byte-identical whatever the transfer options", () => {
+    const plain = writeScenario(buildScenario(options), tempDir(), { muleChains: 0 });
+    const busy = writeScenario(buildScenario(options), tempDir(), { muleChains: 4, smallBusinesses: 3 });
+    assert.equal(readFileSync(plain.accounts, "utf8"), readFileSync(busy.accounts, "utf8"));
   });
 });
