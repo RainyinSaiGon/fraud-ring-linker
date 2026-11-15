@@ -72,7 +72,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Plant bugs in scoring, clustering and mule scoring, require tests to catch them
+      - name: Plant bugs in scoring, clustering, mule and takeover scoring, require tests to catch them
         working-directory: java
         run: ./gradlew :engine:pitest
       - name: Upload mutation report

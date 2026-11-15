@@ -8,7 +8,7 @@ How this project is tested and which checks block a merge.
 |---|---|---|---|
 | Unit | JUnit 5, AssertJ | Each rule, limit and weight behaves as documented | `java/engine/src/test` |
 | Boundary | JUnit parameterized tests | Every rarity limit, time window and score floor, on both sides of its boundary | `ScorerBoundaryTest` |
-| Mutation | PIT | Tests catch at least 85% of bugs planted in `scoring`, `clustering` and `mules` | CI job "Mutation testing" |
+| Mutation | PIT | Tests catch at least 85% of bugs planted in `scoring`, `clustering`, `mules` and `takeover` | CI job "Mutation testing" |
 | Coverage | JaCoCo | Line and branch coverage never drop below the floors in `java/gradle.properties` | `./gradlew build` |
 | Parity | `tools/parity` | Java and Go give byte-identical output on messy synthetic data | CI job "Go and Java parity" |
 | Web contract | MockMvc | JSON shape, validation and error codes of the REST API | `AccountControllerWebTest` |
@@ -21,7 +21,7 @@ How this project is tested and which checks block a merge.
 A pull request is green only if all of these pass:
 
 1. Java tests with coverage floors: line 90%, branch 70% (engine branch 80%).
-2. Mutation score of at least 85% on `scoring`, `clustering` and `mules`.
+2. Mutation score of at least 85% on `scoring`, `clustering`, `mules` and `takeover`.
 3. Go tests with the race detector.
 4. Go and Java parity on 12 synthetic datasets.
 
