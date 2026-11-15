@@ -265,7 +265,8 @@ th {
   }
 }
 
-.side {
+.side,
+.stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -397,4 +398,43 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.mules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mules > li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.mules > li:last-child {
+  border-bottom: none;
+}
+
+.mules .chips {
+  margin: 6px 0;
+}
+
+.link-button {
+  font: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.transfers {
+  margin-top: 8px;
+}
+
+.nowrap,
+.nowrap code {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type ClusterSummary } from "../api";
 import { percent } from "../labels";
+import { MuleList } from "./MuleList";
 import { ProposalList } from "./ProposalList";
 import { RiskBadge } from "./RiskBadge";
 
@@ -91,6 +92,7 @@ export function ReviewQueue() {
         </div>
       )}
 
+      <MuleList reloadToken={reloads} />
       <ProposalList reloadToken={reloads} />
     </section>
   );

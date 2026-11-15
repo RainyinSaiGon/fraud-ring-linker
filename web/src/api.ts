@@ -30,6 +30,41 @@ export interface Decision {
   account_ids: string[];
 }
 
+/** One mule detector that fired, for example {code: "fan_in", description: "6 unrelated payers in 25 min"}. */
+export interface MuleReason {
+  code: string;
+  description: string;
+}
+
+/** How mule-like an account's money movement looks. A flag asks for review; it never restricts. */
+export interface MuleScore {
+  account_id: string;
+  mule_score: number;
+  mule_flagged: boolean;
+  mule_reasons: MuleReason[];
+}
+
+/** A likely mule no analyst has decided on since it was flagged. */
+export interface MuleSummary {
+  account_id: string;
+  cluster_id: string;
+  cluster_size: number;
+  mule_score: number;
+  mule_reasons: MuleReason[];
+  flagged_at: string | null;
+  risk_action: RiskAction;
+  reason: string;
+}
+
+export interface Transfer {
+  transfer_id: string;
+  from_account: string;
+  to_account: string;
+  amount_cents: number;
+  occurred_at: string;
+  direction: "IN" | "OUT";
+}
+
 export interface ClusterDetail {
   cluster_id: string;
   size: number;
@@ -41,6 +76,8 @@ export interface ClusterDetail {
   links: Link[];
   links_truncated: boolean;
   latest_decision: Decision | null;
+  /** Members that have sent or received money; the others have no score. */
+  mule_scores: MuleScore[];
 }
 
 export interface DecisionResult {
@@ -151,6 +188,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
     }),
+  mules: (limit = 100) => request<MuleSummary[]>(`/api/v1/mules?limit=${limit}`),
+  transfers: (accountId: string, limit = 20) =>
+    request<Transfer[]>(`/api/v1/accounts/${encodeURIComponent(accountId)}/transfers?limit=${limit}`),
   proposals: (status: ProposalStatus = "OPEN", limit = 100) =>
     request<MergeProposal[]>(`/api/v1/merge-proposals?status=${status}&limit=${limit}`),
   proposal: (proposalId: string) => request<MergeProposal>(proposalPath(proposalId)),

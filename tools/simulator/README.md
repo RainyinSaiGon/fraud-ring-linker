@@ -52,7 +52,8 @@ This writes four files, all byte-identical for the same seed:
 
 Transfers come from their own random stream, so `accounts.jsonl` is the same with
 or without them, and the linking results in `docs/ROADMAP.md` still hold. `run`
-does not send transfers yet; the service has no endpoint for them (#47).
+sends the sign-ups first, then the transfers, and reports how many planted mules
+the service flagged and whether it flagged any hard legitimate case.
 
 `transfers.jsonl`, one transfer per line. Accounts starting with `ext_` are
 outside the bank:

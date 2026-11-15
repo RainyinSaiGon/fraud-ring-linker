@@ -34,6 +34,11 @@ export function signalLabel(signal: string): string {
   return SIGNALS[signal] ?? signal.replaceAll("_", " ");
 }
 
+/** Whole dollars and cents from integer cents, for example 184233 -> "$1,842.33". */
+export function money(cents: number): string {
+  return (cents / 100).toLocaleString("en-AU", { style: "currency", currency: "AUD", currencyDisplay: "narrowSymbol" });
+}
+
 export function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
