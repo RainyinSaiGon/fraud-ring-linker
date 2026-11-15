@@ -3,15 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "./api";
 import { App, parseRoute } from "./App";
-import { ruleLabel, signalLabel } from "./labels";
+import { money, ruleLabel, signalLabel } from "./labels";
 import {
   clusterDetail,
   decisionResult,
   mergeAcceptResult,
   mockFetch,
+  muleScore,
+  muleSummary,
   proposal,
   PROPOSAL_ID,
   queueItem,
+  transferItem,
 } from "./test/fakeApi";
 
 describe("parseRoute", () => {
@@ -32,6 +35,7 @@ describe("review queue", () => {
   it("lists clusters waiting for review with links to each one", async () => {
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [queueItem(), queueItem({ cluster_id: "c9", size: 2 })] }),
+      "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
 
@@ -46,7 +50,7 @@ describe("review queue", () => {
   });
 
   it("says so when there is nothing to review", async () => {
-    mockFetch({ "/api/v1/clusters?": () => ({ body: [] }), "/api/v1/merge-proposals?": () => ({ body: [] }) });
+    mockFetch({ "/api/v1/clusters?": () => ({ body: [] }), "/api/v1/mules?": () => ({ body: [] }), "/api/v1/merge-proposals?": () => ({ body: [] }) });
     render(<App />);
     expect(await screen.findByText(/Nothing to review/)).toBeInTheDocument();
     expect(await screen.findByText("No merge proposals waiting.")).toBeInTheDocument();
@@ -57,6 +61,7 @@ describe("review queue", () => {
     mockFetch({
       "/api/v1/clusters?": () =>
         up ? { body: [queueItem()] } : { status: 503, body: { title: "Service unavailable", detail: "Linking is temporarily unavailable. Retry later." } },
+      "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
     render(<App />);
@@ -174,6 +179,7 @@ describe("merge proposals in the queue", () => {
   it("lists open proposals with the evidence and a link to review each one", async () => {
     const { calls } = mockFetch({
       "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [proposal()] }),
     });
 
@@ -195,6 +201,7 @@ describe("merge proposals in the queue", () => {
     let up = false;
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [queueItem()] }),
+      "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () =>
         up ? { body: [proposal()] } : { status: 503, body: { detail: "Linking is temporarily unavailable. Retry later." } },
     });
@@ -334,6 +341,155 @@ describe("proposal page", () => {
     mockFetch({});
     open();
     expect(await screen.findByRole("alert")).toHaveTextContent("Merge proposal not found.");
+  });
+});
+
+describe("possible mules in the queue", () => {
+  it("lists flagged accounts with their signals and a link to their cluster", async () => {
+    const { calls } = mockFetch({
+      "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/mules?": () => ({ body: [muleSummary(), muleSummary({ account_id: "acc_9", cluster_id: "c9", cluster_size: 3, mule_score: 0.85 })] }),
+      "/api/v1/merge-proposals?": () => ({ body: [] }),
+    });
+
+    render(<App />);
+
+    const table = await screen.findByRole("table", { name: "Possible mules waiting for review" });
+    const [, first, second] = within(table).getAllByRole("row");
+    expect(first).toHaveTextContent("acc_1");
+    expect(first).toHaveTextContent("94%");
+    expect(first).toHaveTextContent("6 unrelated payers in 25 min, 90% sent on within 30 min, on a money chain of 2 accounts");
+    expect(within(first!).getByRole("link", { name: "Review acc_1 in cluster c7" })).toHaveAttribute("href", "#/clusters/c7");
+    expect(second).toHaveTextContent("(3 accounts)");
+    expect(calls.some((call) => call.url === "/api/v1/mules?limit=100")).toBe(true);
+  });
+
+  it("says so when there are none, and keeps the cluster queue when they fail to load", async () => {
+    let up = false;
+    mockFetch({
+      "/api/v1/clusters?": () => ({ body: [queueItem()] }),
+      "/api/v1/mules?": () => (up ? { body: [] } : { status: 503, body: { detail: "Linking is temporarily unavailable. Retry later." } }),
+      "/api/v1/merge-proposals?": () => ({ body: [] }),
+    });
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Possible mules could not be loaded: Linking is temporarily unavailable");
+    expect(screen.getByRole("link", { name: "c7" })).toBeInTheDocument();
+    up = true;
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("No possible mules waiting.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows when a flag has no recorded time yet", async () => {
+    mockFetch({
+      "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/mules?": () => ({ body: [muleSummary({ flagged_at: null })] }),
+      "/api/v1/merge-proposals?": () => ({ body: [] }),
+    });
+    render(<App />);
+    expect(await screen.findByText("Just now")).toBeInTheDocument();
+  });
+});
+
+describe("money movement on the cluster page", () => {
+  function routesWith(cluster = clusterDetail()) {
+    return {
+      "/api/v1/clusters/c7/decisions": () => ({ body: [] }),
+      "/api/v1/clusters/c7": () => ({ body: cluster }),
+      "/api/v1/audit-events": () => ({ body: [] }),
+      "/api/v1/accounts/acc_1/transfers": () => ({
+        body: [
+          transferItem({ transfer_id: "t2", direction: "OUT", from_account: "acc_1", to_account: "acc_2", amount_cents: 165_810 }),
+          transferItem(),
+        ],
+      }),
+    };
+  }
+
+  it("shows each member's mule score and signals, likeliest first", async () => {
+    mockFetch(routesWith(clusterDetail({
+      mule_scores: [
+        muleScore({ account_id: "acc_2", mule_score: 0.6, mule_flagged: false, mule_reasons: [{ code: "fan_in", description: "20 unrelated payers in 6 h" }] }),
+        muleScore(),
+      ],
+    })));
+    window.location.hash = "#/clusters/c7";
+    render(<App />);
+
+    const heading = await screen.findByRole("heading", { name: "Money movement" });
+    const items = within(heading.parentElement!).getAllByRole("listitem", { name: /^Money movement of/ });
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Money movement of acc_1",
+      "Money movement of acc_2",
+    ]);
+    expect(within(items[0]!).getByText("Likely mule")).toBeInTheDocument();
+    expect(within(items[0]!).getByText("Mule score 94%")).toBeInTheDocument();
+    expect(within(items[0]!).getByText("90% sent on within 30 min")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("Not flagged")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("20 unrelated payers in 6 h")).toBeInTheDocument();
+  });
+
+  it("loads recent transfers only when asked, with direction, other account and amount", async () => {
+    const { calls } = mockFetch(routesWith(clusterDetail({ mule_scores: [muleScore()] })));
+    window.location.hash = "#/clusters/c7";
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Show recent transfers" }));
+
+    const table = await screen.findByRole("table", { name: "Recent transfers of acc_1" });
+    const [, out, into] = within(table).getAllByRole("row");
+    expect(out).toHaveTextContent("Out");
+    expect(out).toHaveTextContent("acc_2");
+    expect(out).toHaveTextContent("$1,658.10");
+    expect(into).toHaveTextContent("In");
+    expect(into).toHaveTextContent("ext_victim_1");
+    expect(into).toHaveTextContent("$1,842.33");
+    expect(calls.filter((call) => call.url.startsWith("/api/v1/accounts/acc_1/transfers"))).toHaveLength(1);
+    expect(calls.find((call) => call.url.startsWith("/api/v1/accounts/"))!.url).toBe("/api/v1/accounts/acc_1/transfers?limit=20");
+  });
+
+  it("says why transfers could not be loaded", async () => {
+    mockFetch({
+      ...routesWith(clusterDetail({ mule_scores: [muleScore({ mule_reasons: [] , mule_flagged: false, mule_score: 0 })] })),
+      "/api/v1/accounts/acc_1/transfers": () => ({ status: 404, body: { detail: "Account acc_1 not found." } }),
+    });
+    window.location.hash = "#/clusters/c7";
+    render(<App />);
+
+    expect(await screen.findByText("No mule signals.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show recent transfers" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Transfers could not be loaded: Account acc_1 not found.");
+  });
+
+  it("is left out when no member has moved money", async () => {
+    mockFetch(routesWith());
+    window.location.hash = "#/clusters/c7";
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Cluster c7" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Money movement" })).not.toBeInTheDocument();
+  });
+
+  it("describes a mule flag in the history", async () => {
+    mockFetch({
+      ...routesWith(),
+      "/api/v1/audit-events": () => ({
+        body: [{
+          event_id: 5, occurred_at: "2026-11-14T03:00:00Z", event_type: "mule.flagged", account_id: "acc_1",
+          cluster_id: "c7", actor: "system", details: { description: "6 unrelated payers in 25 min" },
+        }],
+      }),
+    });
+    window.location.hash = "#/clusters/c7";
+    render(<App />);
+    expect(await screen.findByText("acc_1 flagged as a likely mule: 6 unrelated payers in 25 min")).toBeInTheDocument();
+  });
+});
+
+describe("money", () => {
+  it("formats cents as Australian dollars", () => {
+    expect(money(184_233)).toBe("$1,842.33");
+    expect(money(5)).toBe("$0.05");
   });
 });
 

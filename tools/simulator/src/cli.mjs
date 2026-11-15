@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 // Usage:
 //   node src/cli.mjs run   [--base-url URL] [--seed N] [--customers N] [--households N]
-//                          [--office-workers N] [--rings N] [--truth FILE]
+//                          [--office-workers N] [--rings N] [--mule-chains N] [--truth FILE]
 //   node src/cli.mjs extra --truth FILE [--ring INDEX] [--base-url URL]
 //   node src/cli.mjs export [--seed N] [--customers N] [--households N]
 //                           [--office-workers N] [--rings N] [--mule-chains N] [--out-dir DIR]
 //
-// `run` sends a scenario to the service and prints how well rings were recovered.
+// `run` sends a scenario's sign-ups, then its transfers, to the service and prints how well
+// rings were recovered and mules were flagged.
 // `extra` sends one more sign-up reusing a planted ring's card and phone.
 // `export` writes a scenario to files (accounts, constraints, transfers, ground truth) with no service.
-// `run` does not send transfers yet: the service has no endpoint for them (issue #47).
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
-import { createClient, registerAll } from "./client.mjs";
-import { formatSummary, summarize } from "./report.mjs";
+import { createClient, registerAll, sendTransfers } from "./client.mjs";
+import { formatMuleSummary, formatSummary, summarize, summarizeMules } from "./report.mjs";
 import { writeScenario } from "./export.mjs";
 import { buildScenario, DEFAULTS, extraRingMember } from "./scenario.mjs";
-import { TRANSFER_DEFAULTS } from "./transfers.mjs";
+import { buildTransfers, TRANSFER_DEFAULTS } from "./transfers.mjs";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({
@@ -83,8 +83,16 @@ async function run() {
   console.log(`\nDone in ${seconds.toFixed(1)} s (${Math.round(accounts.length / seconds)} sign-ups/s)\n`);
   console.log(formatSummary(summarize(results, truth)));
 
+  const money = buildTransfers({ accounts, truth }, { muleChains: Number(values["mule-chains"]) });
+  console.log(`\nSending ${money.transfers.length} transfers...`);
+  const { flagged } = await sendTransfers(client, money.transfers, {
+    onProgress: (done, total) => process.stdout.write(`  ${done}/${total}\r`),
+  });
+  console.log(`\n${formatMuleSummary(summarizeMules(flagged, money))}`);
+
   mkdirSync(dirname(values.truth), { recursive: true });
-  writeFileSync(values.truth, JSON.stringify(truth, null, 2));
+  writeFileSync(values.truth, JSON.stringify({ ...truth, muleChains: money.muleChains, transferCases: money.cases },
+    null, 2));
   console.log(`\nGround truth written to ${values.truth}`);
 }
 

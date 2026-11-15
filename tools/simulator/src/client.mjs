@@ -32,6 +32,7 @@ export function createClient(baseUrl, fetchImpl = fetch) {
 
   return {
     registerAccount: (account) => request("POST", "/api/v1/accounts", account),
+    recordTransfers: (transfers) => request("POST", "/api/v1/transfers", { transfers }),
     reviewQueue: (limit = 500) => request("GET", `/api/v1/clusters?limit=${limit}`),
     cluster: (clusterId) => request("GET", `/api/v1/clusters/${encodeURIComponent(clusterId)}`),
     decide: (clusterId, outcome, analyst, note) =>
@@ -46,6 +47,27 @@ function safeJson(text) {
   } catch {
     return { detail: text.slice(0, 200) };
   }
+}
+
+/** The most transfers the service takes in one request. */
+export const TRANSFER_BATCH = 500;
+
+/**
+ * Sends transfers in time order, in batches the service accepts, one batch at a time.
+ *
+ * @returns {{sent: number, flagged: string[]}} accounts flagged as likely mules, in the order they were flagged
+ */
+export async function sendTransfers(client, transfers, { onProgress } = {}) {
+  const flagged = [];
+  let sent = 0;
+  for (let start = 0; start < transfers.length; start += TRANSFER_BATCH) {
+    const batch = transfers.slice(start, start + TRANSFER_BATCH);
+    const response = await client.recordTransfers(batch);
+    flagged.push(...response.flagged_now);
+    sent += batch.length;
+    onProgress?.(sent, transfers.length);
+  }
+  return { sent, flagged };
 }
 
 /**

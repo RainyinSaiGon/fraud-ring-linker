@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type AuditEvent, type ClusterDetail, type Decision } from "../api";
 import { dateTime, percent, ruleLabel, signalLabel } from "../labels";
 import { DecisionForm } from "./DecisionForm";
+import { MoneyMovement } from "./MoneyMovement";
 import { RiskBadge } from "./RiskBadge";
 
 interface Loaded {
@@ -85,42 +86,45 @@ export function ClusterView({ clusterId }: { clusterId: string }) {
       </dl>
 
       <div className="grid">
-        <div className="card">
-          <h2>Why these accounts are linked</h2>
-          {cluster.links.length === 0 ? (
-            <p className="muted">This account is not linked to any other.</p>
-          ) : (
-            <ul className="links">
-              {cluster.links.map((link) => (
-                <li key={`${link.account_a}-${link.account_b}`}>
-                  <div className="link-accounts">
-                    <code>{link.account_a}</code> ↔ <code>{link.account_b}</code>
-                    <span className="score">{percent(link.score)}</span>
-                  </div>
-                  <div className="link-rule">{ruleLabel(link.rule)}</div>
-                  <ul className="chips" aria-label="Shared signals">
-                    {link.shared_signals.map((signal) => (
-                      <li key={signal} className="chip">
-                        {signalLabel(signal)}
-                      </li>
-                    ))}
-                  </ul>
+        <div className="stack">
+          <div className="card">
+            <h2>Why these accounts are linked</h2>
+            {cluster.links.length === 0 ? (
+              <p className="muted">This account is not linked to any other.</p>
+            ) : (
+              <ul className="links">
+                {cluster.links.map((link) => (
+                  <li key={`${link.account_a}-${link.account_b}`}>
+                    <div className="link-accounts">
+                      <code>{link.account_a}</code> ↔ <code>{link.account_b}</code>
+                      <span className="score">{percent(link.score)}</span>
+                    </div>
+                    <div className="link-rule">{ruleLabel(link.rule)}</div>
+                    <ul className="chips" aria-label="Shared signals">
+                      {link.shared_signals.map((signal) => (
+                        <li key={signal} className="chip">
+                          {signalLabel(signal)}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {cluster.links_truncated && (
+              <p className="muted">Large cluster: only links between the first members are shown.</p>
+            )}
+            <h3>Accounts</h3>
+            <ul className="accounts">
+              {cluster.account_ids.map((id) => (
+                <li key={id}>
+                  <code>{id}</code>
                 </li>
               ))}
             </ul>
-          )}
-          {cluster.links_truncated && (
-            <p className="muted">Large cluster: only links between the first members are shown.</p>
-          )}
-          <h3>Accounts</h3>
-          <ul className="accounts">
-            {cluster.account_ids.map((id) => (
-              <li key={id}>
-                <code>{id}</code>
-              </li>
-            ))}
-          </ul>
-          {cluster.account_ids_truncated && <p className="muted">List shortened; {cluster.size} accounts in total.</p>}
+            {cluster.account_ids_truncated && <p className="muted">List shortened; {cluster.size} accounts in total.</p>}
+          </div>
+          <MoneyMovement scores={cluster.mule_scores} />
         </div>
 
         <div className="side">
@@ -158,6 +162,8 @@ function describe(event: AuditEvent): string {
       return `${event.actor} marked it ${event.details.outcome === "CONFIRMED_FRAUD" ? "fraud" : "not fraud"}`;
     case "merge.proposed":
       return `${event.account_id} also links to cluster ${String(event.details.other_cluster_id ?? "")}; merge proposed`;
+    case "mule.flagged":
+      return `${event.account_id} flagged as a likely mule: ${String(event.details.description ?? "")}`;
     case "merge.accepted":
       return `${event.actor} merged clusters (${String(event.details.cluster_size ?? "")} accounts)`;
     default:

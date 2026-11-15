@@ -1,5 +1,14 @@
 import { vi } from "vitest";
-import type { ClusterDetail, ClusterSummary, DecisionResult, MergeAcceptResult, MergeProposal } from "../api";
+import type {
+  ClusterDetail,
+  ClusterSummary,
+  DecisionResult,
+  MergeAcceptResult,
+  MergeProposal,
+  MuleScore,
+  MuleSummary,
+  Transfer,
+} from "../api";
 
 /** Replaces global fetch with a router of canned responses, and records every call. */
 export function mockFetch(routes: Record<string, (init?: RequestInit) => { status?: number; body?: unknown }>) {
@@ -42,6 +51,7 @@ export const clusterDetail = (overrides: Partial<ClusterDetail> = {}): ClusterDe
   ],
   links_truncated: false,
   latest_decision: null,
+  mule_scores: [],
   ...overrides,
 });
 
@@ -92,4 +102,38 @@ export const mergeAcceptResult = (analyst: string): MergeAcceptResult => ({
   cluster_size: 3,
   risk_action: "REVIEW",
   reason: "Linked to 2 other account(s); not reviewed yet.",
+});
+
+export const muleScore = (overrides: Partial<MuleScore> = {}): MuleScore => ({
+  account_id: "acc_1",
+  mule_score: 0.94,
+  mule_flagged: true,
+  mule_reasons: [
+    { code: "fan_in", description: "6 unrelated payers in 25 min" },
+    { code: "pass_through", description: "90% sent on within 30 min" },
+    { code: "chain", description: "on a money chain of 2 accounts" },
+  ],
+  ...overrides,
+});
+
+export const muleSummary = (overrides: Partial<MuleSummary> = {}): MuleSummary => ({
+  account_id: "acc_1",
+  cluster_id: "c7",
+  cluster_size: 1,
+  mule_score: 0.94,
+  mule_reasons: muleScore().mule_reasons,
+  flagged_at: "2026-11-14T04:00:00Z",
+  risk_action: "REVIEW",
+  reason: "Account acc_1 looks like a money mule: 6 unrelated payers in 25 min.",
+  ...overrides,
+});
+
+export const transferItem = (overrides: Partial<Transfer> = {}): Transfer => ({
+  transfer_id: "t1",
+  from_account: "ext_victim_1",
+  to_account: "acc_1",
+  amount_cents: 184_233,
+  occurred_at: "2026-11-14T03:10:00Z",
+  direction: "IN",
+  ...overrides,
 });

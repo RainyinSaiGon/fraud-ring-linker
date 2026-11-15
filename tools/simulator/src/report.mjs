@@ -67,6 +67,49 @@ function ringOf(truth, accountId) {
   return truth.rings.find((ring) => ring.accountIds.includes(accountId))?.ringId;
 }
 
+/**
+ * Compares the accounts the service flagged as likely mules with the planted mule chains.
+ *
+ * @param flagged    account IDs the service flagged
+ * @param money      the result of buildTransfers(): muleChains and the hard legitimate cases
+ */
+export function summarizeMules(flagged, money) {
+  const flaggedSet = new Set(flagged);
+  const mules = money.muleChains.flatMap((chain) => chain.account_ids);
+  const muleSet = new Set(mules);
+  const caseOf = new Map(money.cases.map((c) => [c.account_id, c.case]));
+  const legitFlaggedByCase = {};
+  const otherFlagged = [];
+  for (const id of [...flaggedSet].sort()) {
+    if (muleSet.has(id)) continue;
+    const kind = caseOf.get(id);
+    if (kind) legitFlaggedByCase[kind] = (legitFlaggedByCase[kind] ?? 0) + 1;
+    else otherFlagged.push(id);
+  }
+  return {
+    mulesPlanted: mules.length,
+    mulesFlagged: mules.filter((id) => flaggedSet.has(id)).length,
+    missedMules: mules.filter((id) => !flaggedSet.has(id)),
+    hardCases: money.cases.length,
+    hardCasesFlagged: Object.values(legitFlaggedByCase).reduce((a, b) => a + b, 0),
+    legitFlaggedByCase,
+    otherFlagged,
+  };
+}
+
+/** Plain-text mule report for the terminal. */
+export function formatMuleSummary(summary) {
+  const byCase = Object.entries(summary.legitFlaggedByCase).map(([kind, n]) => `${kind} ${n}`).join(", ");
+  const lines = [
+    `Mules planted:           ${summary.mulesPlanted}`,
+    `Mules flagged:           ${summary.mulesFlagged}`,
+    `Hard cases flagged:      ${summary.hardCasesFlagged} of ${summary.hardCases}${byCase ? ` (${byCase})` : ""}`,
+    `Other accounts flagged:  ${summary.otherFlagged.length}`,
+  ];
+  for (const id of summary.missedMules.slice(0, 5)) lines.push(`missed mule: ${id}`);
+  return lines.join("\n");
+}
+
 /** Plain-text report for the terminal. */
 export function formatSummary(summary) {
   const lines = [

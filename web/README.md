@@ -23,14 +23,18 @@ needs no CORS setup. Set `API_TARGET` to point it elsewhere.
 
 | URL | What it shows |
 |---|---|
-| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first, then open merge proposals ("Possible split rings") |
-| `#/clusters/c12` | **Cluster:** members, each link's rule and shared signals in plain words, the recommended action and why, the decision form, and the history |
+| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first; then likely mules waiting for a decision ("Possible mules"); then open merge proposals ("Possible split rings") |
+| `#/clusters/c12` | **Cluster:** members, each link's rule and shared signals in plain words, the recommended action and why, the decision form, the history, and each member's money movement: mule score, signals in plain words, and recent transfers on request |
 | `#/proposals/<id>` | **Merge proposal:** the accounts on each side, the new account and rule that link them, and Merge clusters / Keep apart |
 
 Design choices:
 - **Decisions need a name.** Both buttons stay disabled until the analyst types a
   name, because the audit log must say who decided. Once login exists (roadmap
   Stage 8), the name will come from the signed-in user instead.
+- **Mule flags ask, never act.** A likely mule shows its signals ("6 unrelated payers in
+  25 min, 90% sent on within 30 min") so the analyst can judge them, and only a
+  decision restricts it. Possible mules get their own list because most are single
+  accounts, which the cluster queue (two or more accounts) never shows.
 - **Split rings wait for a person.** Streaming never merges two clusters by itself.
   When a new account links strongly to two, the page lists the pair, and an
   analyst merges them or keeps them apart. Merging needs a name like any decision,
