@@ -111,6 +111,26 @@ java -jar engine/build/libs/fraud-ring-linker.jar sweep --datasets out/seed-1,ou
 - `tools/cost-sweep/sweep.sh [seedCount]` exports simulator seeds and runs the
   sweep in one command.
 
+## Mules mode
+
+Measures mule detection against the simulator's planted mule chains, then
+sweeps its main thresholds. Each dataset directory also needs `transfers.jsonl`
+and a version 2 `truth.json`, as `tools/simulator export` writes them:
+
+```bash
+java -jar engine/build/libs/fraud-ring-linker.jar mules --datasets out/seed-1,out/seed-2 \
+  [--fan-in-payers 3,4,5,6,8] [--pass-through-shares 0.6,0.7,0.8,0.9] \
+  [--flag-thresholds 0.7,0.75,0.8,0.85,0.9] [--costs 50:2000,50:500,50:50] [--format text|json]
+```
+
+- It prints mules found and missed at today's setting, legitimate accounts
+  flagged by hard case and by the signals that fired, a grid of mules flagged /
+  legitimate accounts flagged, and the cheapest setting at each price pair
+  (`falseFlag:missedMule`).
+- Only accounts in `accounts.jsonl` count as held, as in the service.
+- `tools/mule-sweep/sweep.sh [seedCount]` exports simulator seeds and runs it in
+  one command. Results are in Stage 6 of `docs/ROADMAP.md`.
+
 ## Mule scoring
 
 `MuleScorer` (package `mules`, Java only) scores how mule-like each account's

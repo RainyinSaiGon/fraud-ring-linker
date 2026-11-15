@@ -43,7 +43,7 @@ Sources:
 | 3 | Quality gates: coverage and mutation testing in CI, manual test plan | in progress |
 | 4 | Traffic simulator (Node) and analyst page (React) | in progress |
 | 5 | Business cost report | done |
-| 6 | Mule-network detection from transfers | in progress |
+| 6 | Mule-network detection from transfers | done |
 | 7 | Account-takeover signals at login | planned |
 | 8 | Login and data protection | planned |
 
@@ -185,6 +185,58 @@ for the same reason a shared IP does not.
 
 Done when: the simulator plants a mule chain and the service flags it, with
 tests for each pattern.
+
+**Built (#44):** the engine scores fan-in, pass-through and chains, and no
+single signal can flag an account (#45). The simulator plants mule chains and
+hard legitimate cases (#46). The service flags accounts it holds and asks for
+review (#47). The analyst page lists possible mules and shows each member's
+money movement (#48).
+
+**Measured (#49):** `tools/mule-sweep/sweep.sh` exports simulator seeds 1 to 10
+(about 960 transfers, 2 mule chains of 2-3 hops, and 10 hard legitimate
+accounts each) and scores every setting. Clusters come from batch linking.
+
+| At today's setting (5 payers, 0.80 share, flag at 0.80) | Result |
+|---|---|
+| Mules flagged | 50 of 50 (recall 100%) |
+| Small businesses flagged | 0 of 20 |
+| Own-money savers flagged | 0 of 30 |
+| Payday bill payers flagged | 0 of 50 |
+| Any other held account flagged | 0 (precision 100%) |
+
+Mules flagged / legitimate accounts flagged, summed over the 10 seeds:
+
+| Fan-in payers, pass-through share | Flag at 0.70 | 0.75 | 0.80 (today) | 0.85 | 0.90 |
+|---|---|---|---|---|---|
+| 3 to 8 payers, 0.70 or 0.80 share | 50 / 30 | 50 / 0 | 50 / 0 | 50 / 0 | 5 to 20 / 0 |
+| 3 to 8 payers, 0.60 share | 50 / 46 | 50 / 0 | 50 / 0 | 50 / 0 | 5 to 20 / 0 |
+| 3 to 6 payers, 0.90 share | 44 or 45 / 15 | 38 or 39 / 0 | 38 or 39 / 0 | 33 / 0 | 10 to 12 / 0 |
+
+What this means:
+
+- **Keep the defaults.** Today's setting is cheapest at every price tried
+  ($50 per false flag against $2,000, $500 or $50 per missed mule), and it sits in
+  the middle of a flat region: 3 to 8 payers, a 0.60 to 0.80 share, and a flag
+  threshold of 0.75 to 0.85 all give the same 50 / 0.
+- **The flag threshold is the lever, and the weights explain why.** At 0.70,
+  pass-through alone (weight 0.7) flags an account: all 30 own-money savers are
+  flagged, on pass-through only. With a 0.60 share, 16 payday bill payers (those
+  paying out 60 to 70% of their salary) join them. At 0.90, only first hops with
+  all three signals (0.94) are flagged: 20 of 50, and every second hop (0.85) is
+  missed.
+- **A 0.90 share misses real mules.** Mules pass on 85 to 98% of each payment, so
+  a 0.90 share loses the ones that keep a bigger cut.
+- **Fan-in barely matters at today's threshold.** Pass-through plus chain (0.85)
+  already flags every hop, so raising the payer count from 5 to 8 changes nothing
+  at 0.80. It only shows at 0.90, where first hops need all three signals: there
+  8 payers flags 5 mules instead of 20.
+- **Only held accounts are flagged.** Without that rule, 30 outside billers
+  reached exactly 0.80 (fan-in plus a chain through own-money savers); see #46.
+- **Still to test:** mules that also get a salary, so their pass-through share
+  drops; two mules linked into one cluster, whose transfers then count as the
+  person's own money (a known gap noted in #45); and slower mules that wait
+  longer than an hour. As in Stage 5, the simulator is easier than real traffic,
+  so these numbers are an upper bound.
 
 ### Stage 7: account-takeover signals
 
