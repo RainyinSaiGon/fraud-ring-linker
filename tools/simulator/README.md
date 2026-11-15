@@ -38,21 +38,34 @@ Ground truth (which accounts belong to which ring) is written to `out/truth.json
 
 ```bash
 npm run export -- --seed 3 --out-dir out/seed-3
+npm run export -- --seed 3 --mule-chains 4 --out-dir out/seed-3-mules
 ```
 
-This writes three files, all byte-identical for the same seed:
+This writes four files, all byte-identical for the same seed:
 
 | File | Contents |
 |---|---|
 | `accounts.jsonl` | Every sign-up, in the order `run` sends them |
 | `constraints.jsonl` | Verified-distinct pairs (empty: the simulator does not model identity checks yet) |
-| `truth.json` | Who really owns each account |
+| `transfers.jsonl` | Money movement over the days after the sign-ups, in time order |
+| `truth.json` | Who really owns each account, and who is a mule |
 
-`truth.json` (schema version 1) lists every real-world actor:
+Transfers come from their own random stream, so `accounts.jsonl` is the same with
+or without them, and the linking results in `docs/ROADMAP.md` still hold. `run`
+does not send transfers yet; the service has no endpoint for them (#47).
+
+`transfers.jsonl`, one transfer per line. Accounts starting with `ext_` are
+outside the bank:
+
+```json
+{"transfer_id":"s3_t000412","from_account":"ext_victim_s3_0_2","to_account":"s3_00075","amount_cents":184233,"occurred_at":"2026-11-03T10:41:00Z"}
+```
+
+`truth.json` (schema version 2) lists every real-world actor:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "seed": 3,
   "run_id": "s3",
   "actors": [
@@ -62,7 +75,11 @@ This writes three files, all byte-identical for the same seed:
      "account_ids": ["s3_00007"]}
   ],
   "account_to_actor": {"s3_00007": "person_s3_00007"},
-  "fraud_actor_ids": ["ring_0"]
+  "fraud_actor_ids": ["ring_0"],
+  "mule_chains": [{"chain_id": "mule_chain_0", "account_ids": ["s3_00075", "s3_00153"],
+                   "victims": 8, "cash_out": "ext_cashout_s3_0"}],
+  "mule_account_ids": ["s3_00075", "s3_00153"],
+  "transfer_cases": [{"case": "small_business", "account_id": "s3_00012"}]
 }
 ```
 
@@ -71,6 +88,12 @@ This writes three files, all byte-identical for the same seed:
 - `group` names the shared network (`household_N` or `office`).
 - `account_to_actor` and `fraud_actor_ids` are derived from `actors`, and keep
   the file readable by the Go evaluator (`go run ./cmd/evaluate` in `go/`).
+- `mule_chains` lists each chain's accounts in hop order. Mules are recruited
+  customers, so they keep their `customer` actor.
+- `transfer_cases` names the hard legitimate accounts a mule detector must not
+  flag: `small_business`, `own_money` and `payday_bills`.
+- Version 2 only adds fields. Readers of version 1 (the Go evaluator and the
+  engine's `Truth`) read it unchanged.
 
 ## What it sends
 
@@ -80,6 +103,16 @@ This writes three files, all byte-identical for the same seed:
 | Households | 2-4 people behind one home IP, own phones and cards | **not** link them: a shared IP is not enough |
 | Office | Many unrelated people behind one busy IP | **not** link them |
 | Fraud rings | 3-6 accounts; each reuses the ring's card, or its phone plus a near-identical email | put each ring in one cluster |
+
+Money movement (`transfers.jsonl`):
+
+| Population | Shape | A correct mule detector should |
+|---|---|---|
+| Everyone | A salary from outside the bank, 1-3 bills, sometimes a payment to another customer; households pay each other rent shares | leave them alone |
+| Mule chains (2 by default) | 2-3 recruited customers. 5-9 outside victims pay the first hop, each hop passes 85-98% of every payment on within 5-40 min, and the last hop pays an outside cash-out | flag every hop |
+| Small businesses (2) | Paid by 15-30 payers in one day; pay a supplier 40-60% the next day | **not** flag them: fan-in alone |
+| Own money (3) | Move 85-95% of the salary to their own savings at another bank within 20 min | **not** flag them: pass-through alone |
+| Payday bills (5) | Pay 3-5 bills within 50 min of payday, 40-70% of the salary | **not** flag them |
 
 The same seed always produces the same traffic. IDs carry a per-run prefix,
 so repeated runs against one service never collide. All data is fake.

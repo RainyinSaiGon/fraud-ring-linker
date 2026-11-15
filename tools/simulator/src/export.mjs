@@ -1,25 +1,35 @@
 // Writes a scenario to files so it can be scored offline (no running service):
 //   accounts.jsonl     every sign-up, in the order `run` sends them
 //   constraints.jsonl  verified-distinct pairs (none yet: the simulator does not model identity checks)
-//   truth.json         who really owns each account (schema below)
+//   transfers.jsonl    money movement after the sign-ups, in time order (see transfers.mjs)
+//   truth.json         who really owns each account, and who is a mule (schema below)
 //
-// truth.json, schema_version 1:
+// truth.json, schema_version 2 (version 1 had no mule fields):
 //   actors            one entry per real-world actor:
 //                       actor_id, kind (customer | household_member | office_worker | fraud_ring),
 //                       group (household_N | office, when the actor shares a network with others),
 //                       account_ids, and for rings the `shared` card and phone.
 //   account_to_actor  derived from actors; kept so the Go evaluator (go/internal/evaluation) can read the file
 //   fraud_actor_ids   derived from actors; same reason
+//   mule_chains       chain_id, account_ids in hop order, victims (outside payers), cash_out
+//   mule_account_ids  every account in any mule chain, sorted
+//   transfer_cases    hard legitimate accounts that must not be flagged:
+//                       case (small_business | own_money | payday_bills), account_id
 //
 // Output is deterministic: the same scenario always gives byte-identical files.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { buildTransfers } from "./transfers.mjs";
 
-export const TRUTH_SCHEMA_VERSION = 1;
+export const TRUTH_SCHEMA_VERSION = 2;
 
-/** Builds the versioned ground truth for a scenario from buildScenario(). */
-export function buildTruth(scenario) {
+/**
+ * Builds the versioned ground truth for a scenario from buildScenario().
+ *
+ * @param money the result of buildTransfers(scenario); built with the defaults if not given
+ */
+export function buildTruth(scenario, money = buildTransfers(scenario)) {
   const { truth } = scenario;
   const actors = [];
 
@@ -68,12 +78,21 @@ export function buildTruth(scenario) {
     actors,
     account_to_actor: accountToActor,
     fraud_actor_ids: actors.filter((actor) => actor.kind === "fraud_ring").map((actor) => actor.actor_id),
+    mule_chains: money.muleChains,
+    mule_account_ids: money.muleChains.flatMap((chain) => chain.account_ids).sort(compare),
+    transfer_cases: money.cases,
   };
 }
 
-/** Writes accounts.jsonl, constraints.jsonl and truth.json into `outDir`. Returns their paths. */
-export function writeScenario(scenario, outDir) {
-  const truth = buildTruth(scenario);
+/**
+ * Writes accounts.jsonl, constraints.jsonl, transfers.jsonl and truth.json into `outDir`.
+ *
+ * @param transferOptions overrides for TRANSFER_DEFAULTS, for example {muleChains: 4}
+ * @returns the four paths
+ */
+export function writeScenario(scenario, outDir, transferOptions = {}) {
+  const money = buildTransfers(scenario, transferOptions);
+  const truth = buildTruth(scenario, money);
   const covered = Object.keys(truth.account_to_actor).length;
   if (covered !== scenario.accounts.length) {
     throw new Error(`truth covers ${covered} accounts but the scenario has ${scenario.accounts.length}`);
@@ -82,12 +101,18 @@ export function writeScenario(scenario, outDir) {
   const paths = {
     accounts: join(outDir, "accounts.jsonl"),
     constraints: join(outDir, "constraints.jsonl"),
+    transfers: join(outDir, "transfers.jsonl"),
     truth: join(outDir, "truth.json"),
   };
   writeFileSync(paths.accounts, scenario.accounts.map((account) => JSON.stringify(account)).join("\n") + "\n");
   writeFileSync(paths.constraints, "");
+  writeFileSync(paths.transfers, jsonLines(money.transfers));
   writeFileSync(paths.truth, JSON.stringify(truth, null, 2) + "\n");
   return paths;
+}
+
+function jsonLines(records) {
+  return records.length === 0 ? "" : records.map((record) => JSON.stringify(record)).join("\n") + "\n";
 }
 
 function personId(accountId) {

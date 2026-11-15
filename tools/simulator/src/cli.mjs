@@ -4,11 +4,12 @@
 //                          [--office-workers N] [--rings N] [--truth FILE]
 //   node src/cli.mjs extra --truth FILE [--ring INDEX] [--base-url URL]
 //   node src/cli.mjs export [--seed N] [--customers N] [--households N]
-//                           [--office-workers N] [--rings N] [--out-dir DIR]
+//                           [--office-workers N] [--rings N] [--mule-chains N] [--out-dir DIR]
 //
 // `run` sends a scenario to the service and prints how well rings were recovered.
 // `extra` sends one more sign-up reusing a planted ring's card and phone.
-// `export` writes a scenario to files (accounts, constraints, ground truth) with no service.
+// `export` writes a scenario to files (accounts, constraints, transfers, ground truth) with no service.
+// `run` does not send transfers yet: the service has no endpoint for them (issue #47).
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -17,6 +18,7 @@ import { createClient, registerAll } from "./client.mjs";
 import { formatSummary, summarize } from "./report.mjs";
 import { writeScenario } from "./export.mjs";
 import { buildScenario, DEFAULTS, extraRingMember } from "./scenario.mjs";
+import { TRANSFER_DEFAULTS } from "./transfers.mjs";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({
@@ -28,6 +30,7 @@ const { values } = parseArgs({
     households: { type: "string", default: String(DEFAULTS.households) },
     "office-workers": { type: "string", default: String(DEFAULTS.officeWorkers) },
     rings: { type: "string", default: String(DEFAULTS.rings) },
+    "mule-chains": { type: "string", default: String(TRANSFER_DEFAULTS.muleChains) },
     truth: { type: "string", default: "out/truth.json" },
     ring: { type: "string", default: "0" },
     "run-id": { type: "string" },
@@ -110,7 +113,8 @@ function exportScenario() {
     officeWorkers: Number(values["office-workers"]),
     rings: Number(values.rings),
   });
-  const paths = writeScenario(scenario, outDir);
-  console.log(`Wrote ${scenario.accounts.length} accounts and ${scenario.truth.rings.length} rings:`);
+  const paths = writeScenario(scenario, outDir, { muleChains: Number(values["mule-chains"]) });
+  console.log(`Wrote ${scenario.accounts.length} accounts, ${scenario.truth.rings.length} rings and `
+    + `${values["mule-chains"]} mule chains:`);
   for (const path of Object.values(paths)) console.log(`  ${path}`);
 }
