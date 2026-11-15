@@ -52,8 +52,8 @@ Sources:
 - **JaCoCo** measures test coverage. The build fails if line coverage drops
   below a floor set just under today's number, so coverage can only go up.
 - **PIT mutation testing** changes the code in small ways (flips a condition,
-  removes a call) and checks that a test fails. It runs on the two packages
-  where a silent bug costs most: `scoring` and `clustering`.
+  removes a call) and checks that a test fails. It runs on the three packages
+  where a silent bug costs most: `scoring`, `clustering` and `mules`.
 - **Manual test plan** in `docs/TEST_PLAN.md`: exploratory checks a person
   runs against the analyst page before a release.
 

@@ -30,6 +30,7 @@ pitest {
     targetClasses = setOf(
         "io.github.rainyinsaigon.fraudlinker.scoring.*",
         "io.github.rainyinsaigon.fraudlinker.clustering.*",
+        "io.github.rainyinsaigon.fraudlinker.mules.*",
     )
     targetTests = setOf("io.github.rainyinsaigon.fraudlinker.*")
     mutationThreshold = providers.gradleProperty("mutation.minimum").map { it.toInt() }
