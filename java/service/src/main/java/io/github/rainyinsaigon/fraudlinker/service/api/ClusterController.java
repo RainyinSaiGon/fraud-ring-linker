@@ -70,7 +70,8 @@ public class ClusterController {
                 view.risk().reason(),
                 links,
                 explanation.truncated(),
-                view.latestDecision().map(DecisionResponse::of).orElse(null));
+                view.latestDecision().map(DecisionResponse::of).orElse(null),
+                view.muleScores().stream().map(ApiModels.MuleScoreResponse::of).toList());
     }
 
     @GetMapping("/{clusterId}/decisions")

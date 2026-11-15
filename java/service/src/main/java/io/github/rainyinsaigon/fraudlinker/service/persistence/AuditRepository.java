@@ -22,6 +22,7 @@ public class AuditRepository {
     public static final String MERGE_PROPOSED = "merge.proposed";
     public static final String MERGE_ACCEPTED = "merge.accepted";
     public static final String MERGE_REJECTED = "merge.rejected";
+    public static final String MULE_FLAGGED = "mule.flagged";
 
     /** Actor for automated decisions made by the engine. */
     public static final String SYSTEM = "system";

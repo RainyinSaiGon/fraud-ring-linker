@@ -3,12 +3,11 @@ package io.github.rainyinsaigon.fraudlinker.service.app;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Assignment;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleScore;
 import io.github.rainyinsaigon.fraudlinker.service.engine.LinkerEngine;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.AccountRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.AuditRepository;
-import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepository;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
-import io.github.rainyinsaigon.fraudlinker.service.risk.RiskPolicy;
 import io.github.rainyinsaigon.fraudlinker.streaming.StreamResult;
 import org.springframework.stereotype.Service;
 
@@ -24,20 +23,21 @@ public class AccountService {
     private final LinkerEngine engine;
     private final WriteThrough writeThrough;
     private final AccountRepository accounts;
-    private final DecisionRepository decisions;
+    private final RiskAssessor risk;
     private final AuditRepository audit;
     private final MergeProposalService mergeProposals;
+    private final MuleFlagger muleFlagger;
     private final Clock clock;
 
-    public AccountService(LinkerEngine engine, WriteThrough writeThrough, AccountRepository accounts,
-                          DecisionRepository decisions, AuditRepository audit, MergeProposalService mergeProposals,
-                          Clock clock) {
+    AccountService(LinkerEngine engine, WriteThrough writeThrough, AccountRepository accounts, RiskAssessor risk,
+                   AuditRepository audit, MergeProposalService mergeProposals, MuleFlagger muleFlagger, Clock clock) {
         this.engine = engine;
         this.mergeProposals = mergeProposals;
         this.writeThrough = writeThrough;
         this.accounts = accounts;
-        this.decisions = decisions;
+        this.risk = risk;
         this.audit = audit;
+        this.muleFlagger = muleFlagger;
         this.clock = clock;
     }
 
@@ -45,12 +45,15 @@ public class AccountService {
                              List<MergeProposal> mergeProposals) {
     }
 
-    public record AccountView(Account account, String clusterId, int clusterSize, RiskAssessment risk) {
+    /** @param muleScore null when the account has sent and received no money */
+    public record AccountView(Account account, String clusterId, int clusterSize, RiskAssessment risk,
+                              MuleScore muleScore) {
     }
 
     /**
      * Stores a new account, links it, and audits the outcome. If it also linked
-     * strongly to other clusters, a merge proposal is opened for each.
+     * strongly to other clusters, a merge proposal is opened for each. If transfers
+     * that name it arrived before it did, it may be flagged as a likely mule straight away.
      *
      * @throws ConflictException if the account ID already exists
      */
@@ -65,7 +68,7 @@ public class AccountService {
             StreamResult result = session.streamLinker().assignWithCandidates(account);
             Assignment assignment = result.assignment();
             List<String> members = state.memberIds(assignment.clusterId());
-            RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
+            RiskAssessment risk = this.risk.assess(session, members);
 
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("confidence", assignment.confidence());
@@ -75,6 +78,7 @@ public class AccountService {
             audit.record(now, AuditRepository.ACCOUNT_LINKED, account.accountId(), assignment.clusterId(),
                     AuditRepository.SYSTEM, details);
             List<MergeProposal> proposals = mergeProposals.propose(state, assignment, result.mergeCandidates(), now);
+            muleFlagger.recordNew(session, now);
             return new LinkResult(assignment, members.size(), risk, proposals);
         });
     }
@@ -88,8 +92,8 @@ public class AccountService {
             Account account = accounts.findById(accountId)
                     .orElseThrow(() -> new NotFoundException("Account " + accountId + " not found."));
             List<String> members = state.memberIds(clusterId);
-            RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
-            return new AccountView(account, clusterId, members.size(), risk);
+            return new AccountView(account, clusterId, members.size(), risk.assess(session, members),
+                    session.muleScores().get(accountId));
         });
     }
 }

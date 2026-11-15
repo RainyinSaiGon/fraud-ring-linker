@@ -3,6 +3,7 @@ package io.github.rainyinsaigon.fraudlinker.service.app;
 import io.github.rainyinsaigon.fraudlinker.clustering.ClusterExplainer;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
 import io.github.rainyinsaigon.fraudlinker.domain.Cluster;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleScore;
 import io.github.rainyinsaigon.fraudlinker.service.LinkerProperties;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
 import io.github.rainyinsaigon.fraudlinker.service.engine.LinkerEngine;
@@ -11,7 +12,6 @@ import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepositor
 import io.github.rainyinsaigon.fraudlinker.service.risk.AnalystDecision;
 import io.github.rainyinsaigon.fraudlinker.service.risk.Outcome;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
-import io.github.rainyinsaigon.fraudlinker.service.risk.RiskPolicy;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -32,20 +32,23 @@ public class ClusterService {
     private final DecisionRepository decisions;
     private final AuditRepository audit;
     private final LinkerProperties properties;
+    private final RiskAssessor risk;
     private final Clock clock;
 
-    public ClusterService(LinkerEngine engine, WriteThrough writeThrough, DecisionRepository decisions,
-                          AuditRepository audit, LinkerProperties properties, Clock clock) {
+    ClusterService(LinkerEngine engine, WriteThrough writeThrough, DecisionRepository decisions,
+                   AuditRepository audit, LinkerProperties properties, RiskAssessor risk, Clock clock) {
         this.engine = engine;
         this.writeThrough = writeThrough;
         this.decisions = decisions;
+        this.risk = risk;
         this.audit = audit;
         this.properties = properties;
         this.clock = clock;
     }
 
+    /** @param muleScores mule scores of the listed members that sent or received money, in member order */
     public record ClusterView(ClusterExplainer.Explanation explanation, RiskAssessment risk,
-                              Optional<AnalystDecision> latestDecision) {
+                              Optional<AnalystDecision> latestDecision, List<MuleScore> muleScores) {
     }
 
     /** @throws NotFoundException if the cluster is unknown */
@@ -54,8 +57,14 @@ public class ClusterService {
             ClusterExplainer.Explanation explanation = ClusterExplainer
                     .explain(session.state(), clusterId, properties.maxExplainMembers())
                     .orElseThrow(() -> notFound(clusterId));
-            Optional<AnalystDecision> latest = decisions.findLatestCovering(explanation.accountIds());
-            return new ClusterView(explanation, RiskPolicy.assess(explanation.accountIds(), latest), latest);
+            List<String> members = session.state().memberIds(clusterId);
+            Optional<AnalystDecision> latest = decisions.findLatestCovering(members);
+            Map<String, MuleScore> scores = session.muleScores();
+            List<MuleScore> muleScores = explanation.accountIds().stream()
+                    .map(scores::get)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            return new ClusterView(explanation, risk.assess(session, members, latest), latest, muleScores);
         });
     }
 
@@ -89,9 +98,9 @@ public class ClusterService {
                 if (members.size() < 2) {
                     continue;
                 }
-                RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
-                if (risk.action() == RiskAction.REVIEW) {
-                    items.add(new QueueItem(cluster.clusterId(), members.size(), cluster.confidence(), risk));
+                RiskAssessment assessment = risk.assess(session, members);
+                if (assessment.action() == RiskAction.REVIEW) {
+                    items.add(new QueueItem(cluster.clusterId(), members.size(), cluster.confidence(), assessment));
                 }
             }
             items.sort(Comparator.comparingInt(QueueItem::size).reversed()
@@ -120,14 +129,14 @@ public class ClusterService {
                     members);
             decisions.insert(decision);
 
-            RiskAssessment risk = RiskPolicy.assess(members, Optional.of(decision));
+            RiskAssessment assessment = risk.assess(session, members, Optional.of(decision));
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("decision_id", decision.decisionId().toString());
             details.put("outcome", outcome.name());
             details.put("account_count", members.size());
-            details.put("risk_action", risk.action().name());
+            details.put("risk_action", assessment.action().name());
             audit.record(now, AuditRepository.DECISION_RECORDED, null, clusterId, analyst, details);
-            return new DecisionResult(decision, risk);
+            return new DecisionResult(decision, assessment);
         });
     }
 

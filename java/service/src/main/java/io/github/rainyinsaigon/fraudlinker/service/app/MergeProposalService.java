@@ -11,7 +11,6 @@ import io.github.rainyinsaigon.fraudlinker.service.persistence.AuditRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.MergeProposalRepository;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
-import io.github.rainyinsaigon.fraudlinker.service.risk.RiskPolicy;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -34,14 +33,16 @@ public class MergeProposalService {
     private final MergeProposalRepository proposals;
     private final DecisionRepository decisions;
     private final AuditRepository audit;
+    private final RiskAssessor risk;
     private final Clock clock;
 
-    public MergeProposalService(LinkerEngine engine, WriteThrough writeThrough, MergeProposalRepository proposals,
-                                DecisionRepository decisions, AuditRepository audit, Clock clock) {
+    MergeProposalService(LinkerEngine engine, WriteThrough writeThrough, MergeProposalRepository proposals,
+                         DecisionRepository decisions, AuditRepository audit, RiskAssessor risk, Clock clock) {
         this.engine = engine;
         this.writeThrough = writeThrough;
         this.proposals = proposals;
         this.decisions = decisions;
+        this.risk = risk;
         this.audit = audit;
         this.clock = clock;
     }
@@ -143,17 +144,17 @@ public class MergeProposalService {
 
             String clusterId = currentCluster(state, proposal.accountsA());
             List<String> members = state.memberIds(clusterId);
-            RiskAssessment risk = RiskPolicy.assess(members, decisions.findLatestCovering(members));
+            RiskAssessment assessment = risk.assess(session, members);
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("proposal_id", proposalId.toString());
             details.put("merged", outcome == MergeOutcome.MERGED);
             details.put("cluster_size", members.size());
-            details.put("risk_action", risk.action().name());
+            details.put("risk_action", assessment.action().name());
             audit.record(now, AuditRepository.MERGE_ACCEPTED, null, clusterId, analyst, details);
 
             MergeProposal decided = proposals.findById(proposalId).orElseThrow();
             return new AcceptResult(view(state, decided), outcome == MergeOutcome.MERGED, clusterId, members.size(),
-                    risk);
+                    assessment);
         });
     }
 

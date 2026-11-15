@@ -43,7 +43,7 @@ Sources:
 | 3 | Quality gates: coverage and mutation testing in CI, manual test plan | in progress |
 | 4 | Traffic simulator (Node) and analyst page (React) | in progress |
 | 5 | Business cost report | done |
-| 6 | Mule-network detection from transfers | planned |
+| 6 | Mule-network detection from transfers | in progress |
 | 7 | Account-takeover signals at login | planned |
 | 8 | Login and data protection | planned |
 

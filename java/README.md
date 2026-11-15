@@ -57,9 +57,9 @@ validation).
 | Method and path | What it does |
 |---|---|
 | `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence, **risk action**, and the IDs of any merge proposals it opened. 201, or 409 if the ID exists. |
-| `GET /api/v1/accounts/{id}` | The account, its cluster and current risk action. |
+| `GET /api/v1/accounts/{id}` | The account, its cluster, current risk action, and its mule score and reasons. |
 | `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
-| `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, and which pairs are linked by which rule and shared signals. |
+| `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, which pairs are linked by which rule and shared signals, and members' mule scores. |
 | `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","analyst":"...","note":"..."}`. Covers every current member. |
 | `GET /api/v1/clusters/{id}/decisions` | Decision history for the cluster's current members. |
 | `POST /api/v1/constraints` | `{"account_a","account_b","actor"}`: two accounts are different people (for example, both passed identity checks). 201 new, 200 already known, 409 if they are already linked. |
@@ -67,6 +67,9 @@ validation).
 | `GET /api/v1/merge-proposals/{id}` | One proposal, in any status. |
 | `POST /api/v1/merge-proposals/{id}/accept` | `{"analyst","note"}`: merges the clusters both sides are in now. 409 if already decided, or if a verified-distinct pair would end up together. |
 | `POST /api/v1/merge-proposals/{id}/reject` | `{"analyst","note"}`: keeps the clusters apart; the same pair is not proposed again. |
+| `POST /api/v1/transfers` | `{"transfers":[{"transfer_id","from_account","to_account","amount_cents","occurred_at"}]}`, 1 to 500, stored all or nothing. Either side may be outside the bank. Returns the accounts flagged for the first time and the touched accounts' mule scores. 201, or 409 for a repeated `transfer_id`. |
+| `GET /api/v1/mules?limit=` | Likely mules no analyst has decided on since they were flagged, highest score first. |
+| `GET /api/v1/accounts/{id}/transfers?limit=` | Money into and out of an account, newest first, with `direction` `IN` or `OUT`. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |
 
 Example:
@@ -86,6 +89,7 @@ restriction hurts a real customer, so restriction needs an analyst. First match 
 | Situation | Action |
 |---|---|
 | Latest decision on any member is `CONFIRMED_FRAUD` | `RESTRICT`, including accounts that join later |
+| A member is flagged as a likely mule, and no `NOT_FRAUD` decision since the flag covers it | `REVIEW` |
 | Latest decision is `NOT_FRAUD` and covered every current member | `ALLOW` |
 | Latest decision is `NOT_FRAUD` but accounts joined since | `REVIEW` |
 | No decision, 2+ members | `REVIEW` |
@@ -128,6 +132,20 @@ ring's card or device is restricted the moment it signs up.
   - Accepted merges are stored and replayed after the batch relink on every
     rebuild, so they survive a restart.
   - Proposed, accepted and rejected merges are all audited.
+- **Transfers are evidence of behaviour, not of identity.** They never change a
+  cluster; they only feed mule scoring (fan-in, pass-through, chain; see
+  `engine/README.md`):
+  - Only accounts the bank holds are scored and flagged, because nobody can
+    review an outside account. Outside accounts still count as payers and payees.
+  - A flag never restricts on its own. It makes the account's cluster `REVIEW`,
+    and an analyst decides as for any cluster.
+  - The first flag is recorded in `mule_flags` and audited once as `mule.flagged`.
+    An account whose transfers arrived before it registered is flagged when it
+    registers.
+  - Transfers are kept in memory with the linking state, reloaded on every
+    rebuild, and rescored in full after each change. That is fine at demo scale;
+    incremental scoring of the touched accounts and their neighbours would be the
+    next step.
 
 ### Not built yet
 

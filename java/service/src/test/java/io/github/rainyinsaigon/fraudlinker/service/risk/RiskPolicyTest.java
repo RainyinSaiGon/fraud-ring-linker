@@ -57,6 +57,67 @@ class RiskPolicyTest {
         assertThat(risk.action()).isEqualTo(RiskAction.ALLOW);
     }
 
+    private static MuleFlag flag(String account, double score, Instant flaggedAt) {
+        return new MuleFlag(account, score, "6 unrelated payers in 25 min", flaggedAt);
+    }
+
+    private static AnalystDecision decisionAt(Outcome outcome, Instant at, String... accounts) {
+        return new AnalystDecision(UUID.randomUUID(), "c1", outcome, "analyst-1", null, at, List.of(accounts));
+    }
+
+    @Test
+    void aMuleFlagAsksForReviewEvenOnASingleAccount() {
+        RiskAssessment risk = RiskPolicy.assess(List.of("a"), Optional.empty(),
+                List.of(flag("a", 0.94, Instant.EPOCH)));
+        assertThat(risk.action()).isEqualTo(RiskAction.REVIEW);
+        assertThat(risk.reason()).isEqualTo("Account a looks like a money mule: 6 unrelated payers in 25 min.");
+    }
+
+    @Test
+    void theHighestScoringFlagLeadsTheReasonAndTheRestAreCounted() {
+        RiskAssessment risk = RiskPolicy.assess(List.of("a", "b", "c"), Optional.empty(), List.of(
+                flag("a", 0.85, Instant.EPOCH), flag("c", 0.94, Instant.EPOCH), flag("b", 0.94, Instant.EPOCH)));
+        assertThat(risk.reason()).startsWith("Account b looks like a money mule")
+                .endsWith(" 2 more account(s) in this cluster too.");
+    }
+
+    @Test
+    void confirmedFraudStillRestrictsAFlaggedCluster() {
+        RiskAssessment risk = RiskPolicy.assess(List.of("a"),
+                Optional.of(decisionAt(Outcome.CONFIRMED_FRAUD, Instant.EPOCH, "a")),
+                List.of(flag("a", 0.94, Instant.EPOCH.plusSeconds(60))));
+        assertThat(risk.action()).isEqualTo(RiskAction.RESTRICT);
+    }
+
+    @Test
+    void aNotFraudDecisionAfterTheFlagClearsIt() {
+        Instant flagged = Instant.parse("2026-11-03T10:00:00Z");
+        MuleFlag muleFlag = flag("a", 0.94, flagged);
+        for (Instant decided : List.of(flagged, flagged.plusSeconds(1))) {
+            Optional<AnalystDecision> decision = Optional.of(decisionAt(Outcome.NOT_FRAUD, decided, "a", "b"));
+            assertThat(RiskPolicy.clears(decision, muleFlag)).isTrue();
+            assertThat(RiskPolicy.assess(List.of("a", "b"), decision, List.of(muleFlag)).action())
+                    .isEqualTo(RiskAction.ALLOW);
+        }
+    }
+
+    @Test
+    void aFlagIsNotClearedByAnEarlierDecisionOrOneThatDidNotCoverIt() {
+        Instant flagged = Instant.parse("2026-11-03T10:00:00Z");
+        MuleFlag muleFlag = flag("a", 0.94, flagged);
+        Optional<AnalystDecision> earlier = Optional.of(decisionAt(Outcome.NOT_FRAUD, flagged.minusSeconds(1), "a"));
+        Optional<AnalystDecision> otherAccount = Optional.of(decisionAt(Outcome.NOT_FRAUD, flagged, "b"));
+        Optional<AnalystDecision> fraud = Optional.of(decisionAt(Outcome.CONFIRMED_FRAUD, flagged, "a"));
+
+        assertThat(RiskPolicy.clears(earlier, muleFlag)).isFalse();
+        assertThat(RiskPolicy.clears(otherAccount, muleFlag)).isFalse();
+        assertThat(RiskPolicy.clears(fraud, muleFlag)).isFalse();
+        assertThat(RiskPolicy.clears(Optional.empty(), muleFlag)).isFalse();
+        assertThat(RiskPolicy.clears(Optional.of(decisionAt(Outcome.NOT_FRAUD, flagged, "a")),
+                flag("a", 0.94, null))).isFalse();
+        assertThat(RiskPolicy.assess(List.of("a"), earlier, List.of(muleFlag)).action()).isEqualTo(RiskAction.REVIEW);
+    }
+
     @Test
     void newMembersAfterANotFraudReviewNeedAnotherReview() {
         RiskAssessment risk = RiskPolicy.assess(List.of("a", "b", "c", "d"),

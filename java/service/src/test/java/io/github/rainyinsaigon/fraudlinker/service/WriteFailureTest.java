@@ -63,6 +63,35 @@ class WriteFailureTest {
     }
 
     @Test
+    void failedMuleFlagWriteRollsBackTheTransfersToo() {
+        String mule = "mule_" + run;
+        register(mule, null).statusCode(201);
+        doThrow(new IllegalStateException("simulated disk full"))
+                .when(audit).record(any(), eq(AuditRepository.MULE_FLAGGED), eq(mule), any(), any(), any());
+        StringBuilder batch = new StringBuilder("{\"transfers\":[");
+        for (int i = 0; i < 6; i++) {
+            batch.append(transferJson("v" + i + "_" + run, "ext_v" + i + "_" + run, mule, 50_000,
+                    "2026-11-03T10:0" + i + ":00Z")).append(',');
+        }
+        batch.append(transferJson("out_" + run, mule, "ext_out_" + run, 280_000, "2026-11-03T10:30:00Z"));
+        batch.append("]}");
+
+        given().contentType(ContentType.JSON).body(batch.toString()).post("/api/v1/transfers").then().statusCode(500);
+
+        // Neither stored nor scored: the engine was rebuilt without the batch.
+        given().get("/api/v1/accounts/{id}/transfers", mule).then().statusCode(200).body("size()", equalTo(0));
+        given().get("/api/v1/accounts/{id}", mule).then()
+                .body("mule_score", equalTo(0.0f))
+                .body("risk_action", equalTo("ALLOW"));
+    }
+
+    private static String transferJson(String id, String from, String to, long cents, String at) {
+        return """
+                {"transfer_id":"%s","from_account":"%s","to_account":"%s","amount_cents":%d,"occurred_at":"%s"}"""
+                .formatted(id, from, to, cents, at);
+    }
+
+    @Test
     void failureBeforeAnyChangeDoesNotTriggerARebuild() {
         String accountId = "dup_" + run;
         register(accountId, null).statusCode(201);

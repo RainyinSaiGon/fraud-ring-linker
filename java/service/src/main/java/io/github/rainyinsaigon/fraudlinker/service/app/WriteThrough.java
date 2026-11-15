@@ -1,6 +1,5 @@
 package io.github.rainyinsaigon.fraudlinker.service.app;
 
-import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
 import io.github.rainyinsaigon.fraudlinker.service.engine.LinkerEngine;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -31,24 +30,15 @@ public class WriteThrough {
 
     public <T> T execute(Function<LinkerEngine.Session, T> work) {
         return engine.withLock(session -> {
-            long before = fingerprint(session.state());
+            long before = session.fingerprint();
             try {
                 return transactions.execute(status -> work.apply(session));
             } catch (RuntimeException e) {
-                if (fingerprint(session.state()) != before) {
+                if (session.fingerprint() != before) {
                     session.rebuildFromDatabase();
                 }
                 throw e;
             }
         });
-    }
-
-    /**
-     * Changes whenever the engine is mutated: an account or a constraint is added
-     * (size, pair count), or two clusters are merged (cluster count drops).
-     */
-    private static long fingerprint(LinkState state) {
-        return state.store().size() * 1_000_003L + state.constraints().pairCount()
-                + state.clusterCount() * 1_000_000_007L;
     }
 }
