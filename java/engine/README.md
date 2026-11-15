@@ -111,6 +111,33 @@ java -jar engine/build/libs/fraud-ring-linker.jar sweep --datasets out/seed-1,ou
 - `tools/cost-sweep/sweep.sh [seedCount]` exports simulator seeds and runs the
   sweep in one command.
 
+## Mule scoring
+
+`MuleScorer` (package `mules`, Java only) scores how mule-like each account's
+money movement looks. It's a library for the service; no CLI command yet.
+
+```java
+Map<String, MuleScore> scores = new MuleScorer(MuleConfig.defaults())
+        .scoreAll(transfers, MuleScorer.sameCluster(linkState));
+```
+
+| Reason | Fires when | Weight |
+|---|---|---|
+| `fan_in` | 5+ distinct unrelated payers within 24 h | 0.6 |
+| `pass_through` | 80%+ of the money received leaves again within 60 min, to unrelated accounts | 0.7 |
+| `chain` | money links the account to another pass-through account | 0.5 |
+
+- Weights combine with a noisy-OR, and a score of 0.8 or more flags the account.
+  No single reason reaches 0.8, so a busy small business (fan-in only) or a
+  payday bill payer (pass-through only) is not flagged. Two reasons together are.
+- **Unrelated** means not in the same cluster. A household, or one person moving
+  money between their own accounts, is never fan-in or pass-through.
+- Money in is matched against money out oldest first. Money that leaves after
+  the window counts as the account's own balance.
+- A transfer may name accounts the bank doesn't hold, such as an external victim.
+- Scoring only reads cluster lookups; transfers never change a cluster.
+- The defaults are starting points, to be tuned against the simulator (#49).
+
 ## Input format
 
 `accounts.jsonl`, one object per line:
@@ -141,6 +168,7 @@ java -jar engine/build/libs/fraud-ring-linker.jar sweep --datasets out/seed-1,ou
 | `scoring` | `Scorer`: rarity-weighted evidence and the named merge rules |
 | `clustering` | `BatchLinker`, constraint-aware union-find, `LinkState` lookups and runtime constraints, `ClusterExplainer` |
 | `streaming` | `StreamLinker`: one-event assignment over the live state |
+| `mules` | `MuleScorer`: fan-in, pass-through and chain detection from transfers |
 | `io` | JSONL reading and fixed-layout JSON writing |
 | `cli` | `LinkerCli` command-line entry point |
 
