@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.rainyinsaigon.fraudlinker.LinkerException;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Constraint;
+import io.github.rainyinsaigon.fraudlinker.mules.Transfer;
 import io.github.rainyinsaigon.fraudlinker.normalize.Text;
 
 import java.io.BufferedReader;
@@ -31,7 +32,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Reads accounts and constraints from JSONL (one JSON object per line).
+ * Reads accounts, constraints and transfers from JSONL (one JSON object per line).
  *
  * <p>Blank lines are skipped. Unknown fields are ignored and field names match
  * case-insensitively. A record with a missing {@code account_id} or an invalid
@@ -75,6 +76,17 @@ public final class JsonlReader {
             throw new LinkerException("open constraints \"" + path + "\": " + e.getMessage(), e);
         }
         return constraints;
+    }
+
+    /** Transfers in file order; an invalid one is an error naming the line. */
+    public static List<Transfer> readTransfers(Path path) {
+        List<Transfer> transfers = new ArrayList<>();
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            scan(reader, path.toString(), node -> transfers.add(decodeTransfer(node)));
+        } catch (IOException e) {
+            throw new LinkerException("open transfers \"" + path + "\": " + e.getMessage(), e);
+        }
+        return transfers;
     }
 
     /** Streams accounts one at a time; {@code handler} runs before the next line is read. */
@@ -159,6 +171,19 @@ public final class JsonlReader {
             throw new LinkerException("constraint endpoint is empty");
         }
         return new Constraint(accountA, accountB, relation);
+    }
+
+    private static Transfer decodeTransfer(JsonNode node) {
+        JsonNode amount = field(node, "amount_cents");
+        if (amount == null || !amount.canConvertToLong() || !amount.isIntegralNumber()) {
+            throw new LinkerException("amount_cents must be a whole number of cents");
+        }
+        Instant occurredAt = timestamp(node, "occurred_at");
+        if (occurredAt == null) {
+            throw new LinkerException("missing or invalid occurred_at");
+        }
+        return new Transfer(Text.trimSpace(string(node, "transfer_id")), Text.trimSpace(string(node, "from_account")),
+                Text.trimSpace(string(node, "to_account")), amount.longValue(), occurredAt);
     }
 
     /** Finds a field by exact name, falling back to a case-insensitive match. */
