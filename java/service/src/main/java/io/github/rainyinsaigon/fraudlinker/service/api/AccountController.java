@@ -50,6 +50,9 @@ public class AccountController {
         Account account = view.account();
         return new AccountResponse(account.accountId(), account.email(), account.deviceId(), account.ip(),
                 account.paymentFingerprint(), account.createdAt(), view.clusterId(), view.clusterSize(),
-                view.risk().action(), view.risk().reason());
+                view.risk().action(), view.risk().reason(),
+                view.muleScore() == null ? 0 : view.muleScore().score(),
+                view.muleScore() != null && view.muleScore().flagged(),
+                ApiModels.MuleReasonResponse.of(view.muleScore()));
     }
 }

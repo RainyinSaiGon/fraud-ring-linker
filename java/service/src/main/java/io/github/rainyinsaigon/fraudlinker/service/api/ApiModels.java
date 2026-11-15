@@ -1,11 +1,17 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleReason;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleScore;
+import io.github.rainyinsaigon.fraudlinker.mules.Transfer;
 import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposal;
 import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposalService;
 import io.github.rainyinsaigon.fraudlinker.service.risk.AnalystDecision;
 import io.github.rainyinsaigon.fraudlinker.service.risk.Outcome;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -27,6 +33,9 @@ public final class ApiModels {
 
     /** Account IDs end up in URLs and logs, so only a safe character set is accepted. */
     static final String ACCOUNT_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
+    static final int MAX_TRANSFER_BATCH = 500;
+    /** One trillion dollars: far above any real payment, and far below overflow when summed. */
+    static final long MAX_TRANSFER_CENTS = 100_000_000_000_000L;
 
     public record AccountRequest(
             @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String accountId,
@@ -68,7 +77,72 @@ public final class ApiModels {
             String clusterId,
             int clusterSize,
             RiskAction riskAction,
-            String reason) {
+            String reason,
+            double muleScore,
+            boolean muleFlagged,
+            List<MuleReasonResponse> muleReasons) {
+    }
+
+    public record MuleReasonResponse(String code, String description) {
+        /** No score (an account with no transfers) gives no reasons. */
+        static List<MuleReasonResponse> of(MuleScore score) {
+            return score == null ? List.of() : score.reasons().stream().map(MuleReasonResponse::of).toList();
+        }
+
+        private static MuleReasonResponse of(MuleReason reason) {
+            return new MuleReasonResponse(reason.code(), reason.describe());
+        }
+    }
+
+    /** One account's mule score; accounts with no transfers have none. */
+    public record MuleScoreResponse(String accountId, double muleScore, boolean muleFlagged,
+                                    List<MuleReasonResponse> muleReasons) {
+        static MuleScoreResponse of(MuleScore score) {
+            return new MuleScoreResponse(score.accountId(), score.score(), score.flagged(),
+                    MuleReasonResponse.of(score));
+        }
+    }
+
+    public record TransferRequest(
+            @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String transferId,
+            @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String fromAccount,
+            @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String toAccount,
+            @NotNull @Min(1) @Max(MAX_TRANSFER_CENTS) Long amountCents,
+            @NotNull OffsetDateTime occurredAt) {
+
+        /** @throws io.github.rainyinsaigon.fraudlinker.LinkerException if both sides are the same account */
+        Transfer toTransfer() {
+            return new Transfer(transferId, fromAccount, toAccount, amountCents, occurredAt.toInstant());
+        }
+    }
+
+    /** Up to {@value #MAX_TRANSFER_BATCH} transfers, stored all or nothing. */
+    public record TransferBatchRequest(
+            @NotNull @Size(min = 1, max = MAX_TRANSFER_BATCH) List<@Valid @NotNull TransferRequest> transfers) {
+    }
+
+    /**
+     * @param flaggedNow accounts flagged as likely mules for the first time by this batch
+     * @param muleScores current scores of the accounts the bank holds that this batch touched
+     */
+    public record TransferBatchResponse(int accepted, List<String> flaggedNow, List<MuleScoreResponse> muleScores) {
+    }
+
+    public enum Direction { IN, OUT }
+
+    public record TransferResponse(String transferId, String fromAccount, String toAccount, long amountCents,
+                                   Instant occurredAt, Direction direction) {
+        static TransferResponse of(Transfer transfer, String accountId) {
+            return new TransferResponse(transfer.transferId(), transfer.fromAccount(), transfer.toAccount(),
+                    transfer.amountCents(), transfer.occurredAt(),
+                    transfer.toAccount().equals(accountId) ? Direction.IN : Direction.OUT);
+        }
+    }
+
+    /** A likely mule waiting for an analyst. */
+    public record MuleResponse(String accountId, String clusterId, int clusterSize, double muleScore,
+                               List<MuleReasonResponse> muleReasons, Instant flaggedAt, RiskAction riskAction,
+                               String reason) {
     }
 
     public record ClusterSummaryResponse(String clusterId, int size, double confidence, RiskAction riskAction,
@@ -88,7 +162,8 @@ public final class ApiModels {
             String reason,
             List<LinkResponse> links,
             boolean linksTruncated,
-            DecisionResponse latestDecision) {
+            DecisionResponse latestDecision,
+            List<MuleScoreResponse> muleScores) {
     }
 
     public record DecisionRequest(

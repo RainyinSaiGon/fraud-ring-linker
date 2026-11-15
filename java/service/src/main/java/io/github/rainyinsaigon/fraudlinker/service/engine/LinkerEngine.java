@@ -7,10 +7,15 @@ import io.github.rainyinsaigon.fraudlinker.clustering.LinkState;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState.MergeOutcome;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Constraint;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleConfig;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleScore;
+import io.github.rainyinsaigon.fraudlinker.mules.MuleScorer;
+import io.github.rainyinsaigon.fraudlinker.mules.Transfer;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.AccountRepository;
 import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposal;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.ConstraintRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.MergeProposalRepository;
+import io.github.rainyinsaigon.fraudlinker.service.persistence.TransferRepository;
 import io.github.rainyinsaigon.fraudlinker.streaming.StreamLinker;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -18,7 +23,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
@@ -35,6 +43,10 @@ import java.util.function.Function;
  * accepted merge proposal in the order it was accepted, so an analyst's merge
  * survives a restart.
  *
+ * <p>Transfers are kept here too, for mule scoring. They never change the
+ * linking state; scores are read from it (accounts in one cluster are related)
+ * and are cached until the state or the transfers change.
+ *
  * <p>One lock guards everything, including reads, because the engine is
  * single-threaded by design (union-find lookups compress paths, even on reads).
  * Engine work is microseconds per call; the database write inside the lock is
@@ -47,18 +59,26 @@ public class LinkerEngine {
     private final AccountRepository accounts;
     private final ConstraintRepository constraints;
     private final MergeProposalRepository mergeProposals;
+    private final TransferRepository transferRepository;
+    private final MuleScorer muleScorer = new MuleScorer(MuleConfig.defaults());
     private final ReentrantLock lock = new ReentrantLock();
 
     /** Guarded by {@link #lock}. Null while unavailable. */
     private LinkState state;
     /** Guarded by {@link #lock}. Null while unavailable. */
     private StreamLinker streamLinker;
+    /** Guarded by {@link #lock}. Every stored transfer, in arrival order. */
+    private List<Transfer> transfers = new ArrayList<>();
+    /** Guarded by {@link #lock}. Scores of held accounts, valid while {@link #scoresFingerprint} matches. */
+    private Map<String, MuleScore> muleScores;
+    private long scoresFingerprint;
 
     public LinkerEngine(AccountRepository accounts, ConstraintRepository constraints,
-                        MergeProposalRepository mergeProposals) {
+                        MergeProposalRepository mergeProposals, TransferRepository transferRepository) {
         this.accounts = accounts;
         this.constraints = constraints;
         this.mergeProposals = mergeProposals;
+        this.transferRepository = transferRepository;
     }
 
     @PostConstruct
@@ -76,6 +96,22 @@ public class LinkerEngine {
         LinkState state();
 
         StreamLinker streamLinker();
+
+        /** Every stored transfer, in arrival order (read-only). */
+        List<Transfer> transfers();
+
+        /** Adds a transfer that the caller has just stored in the database. */
+        void addTransfer(Transfer transfer);
+
+        /**
+         * Mule scores of every account the bank holds that sent or received money,
+         * by account ID. Accounts outside the bank count as payers and payees but are
+         * not scored: nobody can review them.
+         */
+        Map<String, MuleScore> muleScores();
+
+        /** Changes whenever the linking state or the transfers change. */
+        long fingerprint();
 
         /** Discards the in-memory state and relinks everything from the database. */
         void rebuildFromDatabase();
@@ -104,6 +140,26 @@ public class LinkerEngine {
                 }
 
                 @Override
+                public List<Transfer> transfers() {
+                    return Collections.unmodifiableList(transfers);
+                }
+
+                @Override
+                public void addTransfer(Transfer transfer) {
+                    transfers.add(transfer);
+                }
+
+                @Override
+                public Map<String, MuleScore> muleScores() {
+                    return scores();
+                }
+
+                @Override
+                public long fingerprint() {
+                    return LinkerEngine.this.fingerprint();
+                }
+
+                @Override
                 public void rebuildFromDatabase() {
                     rebuild();
                 }
@@ -124,6 +180,28 @@ public class LinkerEngine {
     }
 
     /** Caller must hold the lock. */
+    private long fingerprint() {
+        return state.store().size() * 1_000_003L + state.constraints().pairCount()
+                + state.clusterCount() * 1_000_000_007L + transfers.size() * 998_244_353L;
+    }
+
+    /** Caller must hold the lock. */
+    private Map<String, MuleScore> scores() {
+        long now = fingerprint();
+        if (muleScores == null || scoresFingerprint != now) {
+            Map<String, MuleScore> held = new LinkedHashMap<>();
+            muleScorer.scoreAll(transfers, MuleScorer.sameCluster(state)).forEach((accountId, score) -> {
+                if (state.store().indexOf(accountId) >= 0) {
+                    held.put(accountId, score);
+                }
+            });
+            muleScores = Collections.unmodifiableMap(held);
+            scoresFingerprint = now;
+        }
+        return muleScores;
+    }
+
+    /** Caller must hold the lock. */
     private void rebuild() {
         long start = System.nanoTime();
         try {
@@ -141,13 +219,19 @@ public class LinkerEngine {
                             proposal.proposalId());
                 }
             }
+            List<Transfer> storedTransfers = new ArrayList<>(transferRepository.findAll());
             state = rebuilt;
             streamLinker = new StreamLinker(rebuilt);
-            log.info("Linked {} accounts with {} verified-distinct pairs and {} accepted merges in {} ms",
-                    stored.size(), pairs.size(), accepted.size(), (System.nanoTime() - start) / 1_000_000);
+            transfers = storedTransfers;
+            muleScores = null;
+            log.info("Linked {} accounts with {} verified-distinct pairs and {} accepted merges, and loaded {} "
+                            + "transfers, in {} ms", stored.size(), pairs.size(), accepted.size(),
+                    storedTransfers.size(), (System.nanoTime() - start) / 1_000_000);
         } catch (RuntimeException e) {
             state = null;
             streamLinker = null;
+            transfers = new ArrayList<>();
+            muleScores = null;
             log.error("Could not load linking state from the database; requests will fail until it can", e);
             throw new EngineUnavailableException(e);
         }
