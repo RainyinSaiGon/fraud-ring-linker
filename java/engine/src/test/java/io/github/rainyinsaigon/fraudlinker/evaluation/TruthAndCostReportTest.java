@@ -71,6 +71,29 @@ class TruthAndCostReportTest {
     }
 
     @Test
+    void readsVersionThreeWithTakeoverFieldsTheSameWay() throws IOException {
+        // Version 3 (simulator logins) adds takeover fields; linking evaluation reads what it did before.
+        Truth truth = Truth.read(write("""
+                {"schema_version": 3, "seed": 1, "run_id": "s1",
+                 "actors": [
+                   {"actor_id": "ring_0", "kind": "fraud_ring", "account_ids": ["a", "b"]},
+                   {"actor_id": "person_c", "kind": "customer", "account_ids": ["c"]}],
+                 "account_to_actor": {"a": "ring_0", "b": "ring_0", "c": "person_c"},
+                 "fraud_actor_ids": ["ring_0"],
+                 "mule_chains": [], "mule_account_ids": [], "transfer_cases": [],
+                 "takeovers": [{"account_id": "c", "kind": "phishing", "attacker_device": "dev_x",
+                                "first_bad_login_id": "s1_l0000009", "first_bad_at": "2026-11-14T13:35:00Z",
+                                "attacker_login_ids": ["s1_l0000009"]}],
+                 "takeover_account_ids": ["c"],
+                 "login_cases": [{"case": "holiday", "account_id": "a"}]}
+                """));
+
+        assertThat(truth.accountToActor()).hasSize(3);
+        assertThat(truth.fraudActorIds()).containsExactly("ring_0");
+        assertThat(truth.kindOfAccount("c")).isEqualTo("customer");
+    }
+
+    @Test
     void readsTheOriginalFormatWithoutKinds() throws IOException {
         Truth truth = Truth.read(write("""
                 {"account_to_actor": {"a": "x", "b": "x"}, "fraud_actor_ids": ["x"]}

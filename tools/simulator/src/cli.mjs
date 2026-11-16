@@ -9,7 +9,8 @@
 // `run` sends a scenario's sign-ups, then its transfers, to the service and prints how well
 // rings were recovered and mules were flagged.
 // `extra` sends one more sign-up reusing a planted ring's card and phone.
-// `export` writes a scenario to files (accounts, constraints, transfers, ground truth) with no service.
+// `export` writes a scenario to files (accounts, constraints, transfers, logins, ground truth) with no service.
+// `run` does not send logins yet: the service does not accept them.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -122,7 +123,8 @@ function exportScenario() {
     rings: Number(values.rings),
   });
   const paths = writeScenario(scenario, outDir, { muleChains: Number(values["mule-chains"]) });
-  console.log(`Wrote ${scenario.accounts.length} accounts, ${scenario.truth.rings.length} rings and `
-    + `${values["mule-chains"]} mule chains:`);
+  const truth = JSON.parse(readFileSync(paths.truth, "utf8"));
+  console.log(`Wrote ${scenario.accounts.length} accounts, ${scenario.truth.rings.length} rings, `
+    + `${truth.mule_chains.length} mule chains and ${truth.takeovers.length} takeovers:`);
   for (const path of Object.values(paths)) console.log(`  ${path}`);
 }

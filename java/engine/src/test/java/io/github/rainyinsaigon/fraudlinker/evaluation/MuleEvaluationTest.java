@@ -179,6 +179,27 @@ class MuleEvaluationTest {
         assertThat(truth.caseOf()).containsExactly(Map.entry("s1", "own_money"));
     }
 
+    @Test
+    void readsMuleTruthFromAVersionThreeFile() throws IOException {
+        // Version 3 adds login fields; the mule fields read as before.
+        Path file = dir.resolve("truth.json");
+        Files.writeString(file, """
+                {"schema_version": 3, "account_to_actor": {"m1": "p1"}, "fraud_actor_ids": [],
+                 "mule_account_ids": ["m1"],
+                 "transfer_cases": [{"case": "payday_bills", "account_id": "s1"}],
+                 "takeovers": [{"account_id": "s1", "kind": "password_guessing", "attacker_device": "dev_x",
+                                "first_bad_login_id": "l9", "first_bad_at": "2026-11-14T13:35:00Z",
+                                "attacker_login_ids": ["l8", "l9"]}],
+                 "takeover_account_ids": ["s1"],
+                 "login_cases": [{"case": "new_phone", "account_id": "m1"}]}
+                """);
+
+        MuleTruth truth = MuleTruth.read(file);
+
+        assertThat(truth.muleAccountIds()).containsExactly("m1");
+        assertThat(truth.caseOf()).containsExactly(Map.entry("s1", "payday_bills"));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "{\"account_to_actor\": {\"a\": \"x\"}}",
