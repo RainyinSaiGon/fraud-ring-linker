@@ -3,6 +3,7 @@ import { api, ApiError, type ClusterSummary } from "../api";
 import { percent } from "../labels";
 import { MuleList } from "./MuleList";
 import { ProposalList } from "./ProposalList";
+import { TakeoverList } from "./TakeoverList";
 import { RiskBadge } from "./RiskBadge";
 
 type State =
@@ -92,6 +93,7 @@ export function ReviewQueue() {
         </div>
       )}
 
+      <TakeoverList reloadToken={reloads} />
       <MuleList reloadToken={reloads} />
       <ProposalList reloadToken={reloads} />
     </section>

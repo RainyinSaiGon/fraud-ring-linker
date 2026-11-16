@@ -3,6 +3,7 @@
 
 export type RiskAction = "ALLOW" | "REVIEW" | "STEP_UP" | "RESTRICT";
 export type Outcome = "CONFIRMED_FRAUD" | "NOT_FRAUD";
+export type TakeoverOutcome = "CONFIRMED_TAKEOVER" | "NOT_TAKEOVER";
 
 export interface ClusterSummary {
   cluster_id: string;
@@ -63,6 +64,79 @@ export interface Transfer {
   amount_cents: number;
   occurred_at: string;
   direction: "IN" | "OUT";
+}
+
+/**
+ * One takeover signal that fired, for example {code: "new_device", description:
+ * "first login from a new device after 7 logins", at: "..."}. `at` is the time
+ * of the login that showed it.
+ */
+export interface TakeoverReason {
+  code: string;
+  description: string;
+  at: string;
+}
+
+/** One account as the service sees it, with its own action (including takeover rules). */
+export interface AccountDetail {
+  account_id: string;
+  email: string;
+  device_id: string | null;
+  ip: string;
+  payment_fingerprint: string | null;
+  created_at: string;
+  cluster_id: string;
+  cluster_size: number;
+  risk_action: RiskAction;
+  reason: string;
+  mule_score: number;
+  mule_flagged: boolean;
+  mule_reasons: MuleReason[];
+  takeover_score: number;
+  takeover_flagged: boolean;
+  takeover_reasons: TakeoverReason[];
+}
+
+/** A possible takeover no analyst has decided on since it was flagged. */
+export interface TakeoverSummary {
+  account_id: string;
+  cluster_id: string;
+  cluster_size: number;
+  takeover_score: number;
+  takeover_reasons: TakeoverReason[];
+  flagged_at: string | null;
+  /** When the incident reached its score. */
+  reached_at: string;
+  risk_action: RiskAction;
+  reason: string;
+}
+
+export interface Login {
+  login_id: string;
+  account_id: string;
+  device_id: string | null;
+  ip: string | null;
+  success: boolean;
+  occurred_at: string;
+  /** Where IP geolocation put the address; both null when unknown. */
+  latitude: number | null;
+  longitude: number | null;
+}
+
+/** An analyst's takeover decision. It covers one account, never the rest of its cluster. */
+export interface TakeoverDecision {
+  decision_id: string;
+  account_id: string;
+  outcome: TakeoverOutcome;
+  analyst: string;
+  note: string | null;
+  decided_at: string;
+}
+
+export interface TakeoverDecisionResult {
+  decision: TakeoverDecision;
+  risk_action: RiskAction;
+  reason: string;
 }
 
 export interface ClusterDetail {
@@ -175,6 +249,7 @@ function decisionBody(analyst: string, note: string): string {
 }
 
 const proposalPath = (proposalId: string) => `/api/v1/merge-proposals/${encodeURIComponent(proposalId)}`;
+const accountPath = (accountId: string) => `/api/v1/accounts/${encodeURIComponent(accountId)}`;
 
 export const api = {
   reviewQueue: (limit = 100) => request<ClusterSummary[]>(`/api/v1/clusters?limit=${limit}`),
@@ -185,6 +260,17 @@ export const api = {
     request<AuditEvent[]>(`/api/v1/audit-events?cluster_id=${encodeURIComponent(clusterId)}&limit=${limit}`),
   decide: (clusterId: string, outcome: Outcome, analyst: string, note: string) =>
     request<DecisionResult>(`/api/v1/clusters/${encodeURIComponent(clusterId)}/decisions`, {
+      method: "POST",
+      body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
+    }),
+  account: (accountId: string) => request<AccountDetail>(accountPath(accountId)),
+  accountAudit: (accountId: string, limit = 20) =>
+    request<AuditEvent[]>(`/api/v1/audit-events?account_id=${encodeURIComponent(accountId)}&limit=${limit}`),
+  takeovers: (limit = 100) => request<TakeoverSummary[]>(`/api/v1/takeovers?limit=${limit}`),
+  logins: (accountId: string, limit = 30) => request<Login[]>(`${accountPath(accountId)}/logins?limit=${limit}`),
+  takeoverDecisions: (accountId: string) => request<TakeoverDecision[]>(`${accountPath(accountId)}/takeover-decisions`),
+  decideTakeover: (accountId: string, outcome: TakeoverOutcome, analyst: string, note: string) =>
+    request<TakeoverDecisionResult>(`${accountPath(accountId)}/takeover-decisions`, {
       method: "POST",
       body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
     }),

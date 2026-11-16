@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type AuditEvent, type ClusterDetail, type Decision } from "../api";
-import { dateTime, percent, ruleLabel, signalLabel } from "../labels";
+import { dateTime, describeEvent, percent, ruleLabel, signalLabel } from "../labels";
 import { DecisionForm } from "./DecisionForm";
 import { MoneyMovement } from "./MoneyMovement";
 import { RiskBadge } from "./RiskBadge";
@@ -118,7 +118,9 @@ export function ClusterView({ clusterId }: { clusterId: string }) {
             <ul className="accounts">
               {cluster.account_ids.map((id) => (
                 <li key={id}>
-                  <code>{id}</code>
+                  <a href={`#/accounts/${encodeURIComponent(id)}`} aria-label={`Open account ${id}`}>
+                    <code>{id}</code>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -142,7 +144,7 @@ export function ClusterView({ clusterId }: { clusterId: string }) {
                 {audit.map((event) => (
                   <li key={event.event_id}>
                     <span className="when">{dateTime(event.occurred_at)}</span>
-                    <span>{describe(event)}</span>
+                    <span>{describeEvent(event)}</span>
                   </li>
                 ))}
               </ol>
@@ -152,21 +154,4 @@ export function ClusterView({ clusterId }: { clusterId: string }) {
       </div>
     </section>
   );
-}
-
-function describe(event: AuditEvent): string {
-  switch (event.event_type) {
-    case "account.linked":
-      return `${event.account_id} joined (${String(event.details.risk_action ?? "")})`;
-    case "decision.recorded":
-      return `${event.actor} marked it ${event.details.outcome === "CONFIRMED_FRAUD" ? "fraud" : "not fraud"}`;
-    case "merge.proposed":
-      return `${event.account_id} also links to cluster ${String(event.details.other_cluster_id ?? "")}; merge proposed`;
-    case "mule.flagged":
-      return `${event.account_id} flagged as a likely mule: ${String(event.details.description ?? "")}`;
-    case "merge.accepted":
-      return `${event.actor} merged clusters (${String(event.details.cluster_size ?? "")} accounts)`;
-    default:
-      return `${event.event_type} by ${event.actor}`;
-  }
 }
