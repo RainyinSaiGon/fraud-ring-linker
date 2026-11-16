@@ -197,6 +197,12 @@ th {
   color: var(--restrict-text);
 }
 
+/* Blocked until the customer re-verifies: as serious as a restriction, for one account. */
+.badge-step_up {
+  background: var(--restrict-bg);
+  color: var(--restrict-text);
+}
+
 .button {
   font: inherit;
   font-weight: 600;

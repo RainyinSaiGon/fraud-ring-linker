@@ -26,6 +26,13 @@ import java.util.Set;
  *   <li>No decision, more than one member: REVIEW.</li>
  *   <li>No decision, single account: ALLOW.</li>
  * </ol>
+ *
+ * <p>A takeover harms one real customer, so it is judged per account, not per
+ * cluster. {@link #assessAccount} puts two rules after rule 1: the account's
+ * latest takeover decision is CONFIRMED_TAKEOVER (no later NOT_TAKEOVER, which is
+ * how a re-verified customer is recorded): STEP_UP; the account is flagged as a
+ * possible takeover and no takeover decision was made since: REVIEW, even for a
+ * single account. The cluster's own action ignores its members' takeovers.
  */
 public final class RiskPolicy {
     private RiskPolicy() {
@@ -67,6 +74,42 @@ public final class RiskPolicy {
                     "Linked to " + (clusterMembers.size() - 1) + " other account(s); not reviewed yet.");
         }
         return new RiskAssessment(RiskAction.ALLOW, "Not linked to any other account.");
+    }
+
+    /**
+     * The action for one account: the cluster rules, with the account's own
+     * takeover rules after CONFIRMED_FRAUD.
+     *
+     * @param takeoverFlag     the account's takeover flag, if its logins currently look like a takeover
+     * @param takeoverDecision the account's latest takeover decision, if any
+     */
+    public static RiskAssessment assessAccount(String accountId, List<String> clusterMembers,
+                                               Optional<AnalystDecision> latestDecision, List<MuleFlag> muleFlags,
+                                               Optional<TakeoverFlag> takeoverFlag,
+                                               Optional<TakeoverDecision> takeoverDecision) {
+        RiskAssessment cluster = assess(clusterMembers, latestDecision, muleFlags);
+        if (cluster.action() == RiskAction.RESTRICT) {
+            return cluster;
+        }
+        if (takeoverDecision.isPresent() && takeoverDecision.get().outcome() == TakeoverOutcome.CONFIRMED_TAKEOVER) {
+            return new RiskAssessment(RiskAction.STEP_UP, "Account " + accountId + " was confirmed as taken over by "
+                    + takeoverDecision.get().analyst() + "; re-verify the customer before letting them in.");
+        }
+        if (takeoverFlag.isPresent() && !answers(takeoverDecision, takeoverFlag.get())) {
+            return new RiskAssessment(RiskAction.REVIEW, "Account " + accountId + " may have been taken over: "
+                    + takeoverFlag.get().description() + ".");
+        }
+        return cluster;
+    }
+
+    /**
+     * True when an analyst made a takeover decision about this account at or after
+     * it was flagged. An earlier decision can't answer it: the flag is newer evidence.
+     */
+    public static boolean answers(Optional<TakeoverDecision> decision, TakeoverFlag flag) {
+        return decision.isPresent()
+                && flag.flaggedAt() != null
+                && !decision.get().decidedAt().isBefore(flag.flaggedAt());
     }
 
     /**

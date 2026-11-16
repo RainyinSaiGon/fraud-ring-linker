@@ -1,7 +1,7 @@
 // Typed client for the fraud-ring-linker REST API. Field names match the
 // service's snake_case JSON exactly.
 
-export type RiskAction = "ALLOW" | "REVIEW" | "RESTRICT";
+export type RiskAction = "ALLOW" | "REVIEW" | "STEP_UP" | "RESTRICT";
 export type Outcome = "CONFIRMED_FRAUD" | "NOT_FRAUD";
 
 export interface ClusterSummary {

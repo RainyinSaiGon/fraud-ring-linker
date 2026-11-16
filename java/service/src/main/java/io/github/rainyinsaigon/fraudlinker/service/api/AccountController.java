@@ -53,6 +53,9 @@ public class AccountController {
                 view.risk().action(), view.risk().reason(),
                 view.muleScore() == null ? 0 : view.muleScore().score(),
                 view.muleScore() != null && view.muleScore().flagged(),
-                ApiModels.MuleReasonResponse.of(view.muleScore()));
+                ApiModels.MuleReasonResponse.of(view.muleScore()),
+                view.takeoverScore() == null ? 0 : view.takeoverScore().score(),
+                view.takeoverScore() != null && view.takeoverScore().flagged(),
+                ApiModels.TakeoverReasonResponse.of(view.takeoverScore()));
     }
 }

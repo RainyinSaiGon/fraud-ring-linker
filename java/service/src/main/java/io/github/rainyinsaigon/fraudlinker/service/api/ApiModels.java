@@ -9,6 +9,11 @@ import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposalService;
 import io.github.rainyinsaigon.fraudlinker.service.risk.AnalystDecision;
 import io.github.rainyinsaigon.fraudlinker.service.risk.Outcome;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
+import io.github.rainyinsaigon.fraudlinker.service.risk.TakeoverDecision;
+import io.github.rainyinsaigon.fraudlinker.service.risk.TakeoverOutcome;
+import io.github.rainyinsaigon.fraudlinker.takeover.Login;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverReason;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverScore;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,6 +39,7 @@ public final class ApiModels {
     /** Account IDs end up in URLs and logs, so only a safe character set is accepted. */
     static final String ACCOUNT_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
     static final int MAX_TRANSFER_BATCH = 500;
+    static final int MAX_LOGIN_BATCH = 500;
     /** One trillion dollars: far above any real payment, and far below overflow when summed. */
     static final long MAX_TRANSFER_CENTS = 100_000_000_000_000L;
 
@@ -80,7 +86,10 @@ public final class ApiModels {
             String reason,
             double muleScore,
             boolean muleFlagged,
-            List<MuleReasonResponse> muleReasons) {
+            List<MuleReasonResponse> muleReasons,
+            double takeoverScore,
+            boolean takeoverFlagged,
+            List<TakeoverReasonResponse> takeoverReasons) {
     }
 
     public record MuleReasonResponse(String code, String description) {
@@ -143,6 +152,87 @@ public final class ApiModels {
     public record MuleResponse(String accountId, String clusterId, int clusterSize, double muleScore,
                                List<MuleReasonResponse> muleReasons, Instant flaggedAt, RiskAction riskAction,
                                String reason) {
+    }
+
+    public record LoginRequest(
+            @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String loginId,
+            @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String accountId,
+            @Size(max = 256) String deviceId,
+            @Size(max = 64) String ip,
+            @NotNull Boolean success,
+            @NotNull OffsetDateTime occurredAt,
+            Double latitude,
+            Double longitude) {
+
+        /** @throws io.github.rainyinsaigon.fraudlinker.LinkerException if the location is half given or off the globe */
+        Login toLogin() {
+            return new Login(loginId, accountId, deviceId, ip, success, occurredAt.toInstant(), latitude, longitude);
+        }
+    }
+
+    /** Up to {@value #MAX_LOGIN_BATCH} logins, stored all or nothing. */
+    public record LoginBatchRequest(
+            @NotNull @Size(min = 1, max = MAX_LOGIN_BATCH) List<@Valid @NotNull LoginRequest> logins) {
+    }
+
+    public record TakeoverReasonResponse(String code, String description, Instant at) {
+        /** No score (an account with no logins) gives no reasons. */
+        static List<TakeoverReasonResponse> of(TakeoverScore score) {
+            return score == null ? List.of() : score.reasons().stream().map(TakeoverReasonResponse::of).toList();
+        }
+
+        private static TakeoverReasonResponse of(TakeoverReason reason) {
+            return new TakeoverReasonResponse(reason.code(), reason.describe(), reason.at());
+        }
+    }
+
+    /** One account's takeover score; accounts with no logins have none. */
+    public record TakeoverScoreResponse(String accountId, double takeoverScore, boolean takeoverFlagged,
+                                        List<TakeoverReasonResponse> takeoverReasons) {
+        static TakeoverScoreResponse of(TakeoverScore score) {
+            return new TakeoverScoreResponse(score.accountId(), score.score(), score.flagged(),
+                    TakeoverReasonResponse.of(score));
+        }
+    }
+
+    /**
+     * @param flaggedNow     accounts flagged as possible takeovers for the first time by this batch
+     * @param takeoverScores current scores of the accounts the bank holds that this batch touched
+     */
+    public record LoginBatchResponse(int accepted, List<String> flaggedNow,
+                                     List<TakeoverScoreResponse> takeoverScores) {
+    }
+
+    public record LoginResponse(String loginId, String accountId, String deviceId, String ip, boolean success,
+                                Instant occurredAt, Double latitude, Double longitude) {
+        static LoginResponse of(Login login) {
+            return new LoginResponse(login.loginId(), login.accountId(), login.deviceId(), login.ip(),
+                    login.success(), login.occurredAt(), login.latitude(), login.longitude());
+        }
+    }
+
+    /** A possible takeover waiting for an analyst. */
+    public record TakeoverResponse(String accountId, String clusterId, int clusterSize, double takeoverScore,
+                                   List<TakeoverReasonResponse> takeoverReasons, Instant flaggedAt,
+                                   Instant reachedAt, RiskAction riskAction, String reason) {
+    }
+
+    public record TakeoverDecisionRequest(
+            @NotNull TakeoverOutcome outcome,
+            @NotBlank @Size(max = 128) String analyst,
+            @Size(max = 2000) String note) {
+    }
+
+    public record TakeoverDecisionResponse(UUID decisionId, String accountId, TakeoverOutcome outcome,
+                                           String analyst, String note, Instant decidedAt) {
+        static TakeoverDecisionResponse of(TakeoverDecision decision) {
+            return new TakeoverDecisionResponse(decision.decisionId(), decision.accountId(), decision.outcome(),
+                    decision.analyst(), decision.note(), decision.decidedAt());
+        }
+    }
+
+    public record TakeoverDecisionResultResponse(TakeoverDecisionResponse decision, RiskAction riskAction,
+                                                 String reason) {
     }
 
     public record ClusterSummaryResponse(String clusterId, int size, double confidence, RiskAction riskAction,

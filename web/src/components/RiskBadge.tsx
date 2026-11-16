@@ -3,6 +3,7 @@ import type { RiskAction } from "../api";
 const TEXT: Record<RiskAction, string> = {
   ALLOW: "Allow",
   REVIEW: "Needs review",
+  STEP_UP: "Step up",
   RESTRICT: "Restrict",
 };
 
