@@ -158,6 +158,39 @@ Map<String, MuleScore> scores = new MuleScorer(MuleConfig.defaults())
 - Scoring only reads cluster lookups; transfers never change a cluster.
 - The defaults are starting points, to be tuned against the simulator (#49).
 
+## Takeover scoring
+
+`TakeoverScorer` (package `takeover`, Java only) scores how much each account's
+logins look like a takeover of a real customer's account. It's a library for
+the service; no CLI command yet.
+
+```java
+Map<String, TakeoverScore> scores = new TakeoverScorer(TakeoverConfig.defaults())
+        .scoreAll(logins, MuleScorer.sameCluster(linkState));
+```
+
+| Reason | Fires when | Weight |
+|---|---|---|
+| `new_device` | a successful login from a device the account never used, after 5+ earlier logins | 0.4 |
+| `impossible_travel` | two located successful logins 300+ km apart, faster than 900 km/h | 0.7 |
+| `failed_burst_then_success` | 5+ failed logins within 15 min, then a success | 0.7 |
+| `failed_burst` | 5+ failed logins within 15 min, no success | 0.3 |
+| `shared_device` | the login's device logged in to 4+ unrelated accounts within 24 h | 0.7 |
+
+- **Signals combine only within one incident** (24 h by default). A new phone in
+  March and a forgotten password in May are two ordinary events. An account's
+  score is its worst incident's noisy-OR, one weight per kind of signal.
+- 0.8 or more flags the account. No single signal reaches it, so a new phone, a
+  holiday flight, a forgotten password or a shared family tablet alone isn't
+  flagged. A new device plus impossible travel, a guessed password or a
+  stuffing device (0.82) is.
+- `reachedAt` says when the worst incident reached its score, so an evaluation
+  can measure how soon a takeover is caught.
+- Logins carry their location from upstream, when known; logins without one
+  skip the travel check. A device shared inside one cluster isn't "shared".
+- Scoring only reads cluster lookups; logins never change a cluster.
+- The defaults are starting points, to be tuned against the simulator (#60).
+
 ## Input format
 
 `accounts.jsonl`, one object per line:
@@ -189,6 +222,7 @@ Map<String, MuleScore> scores = new MuleScorer(MuleConfig.defaults())
 | `clustering` | `BatchLinker`, constraint-aware union-find, `LinkState` lookups and runtime constraints, `ClusterExplainer` |
 | `streaming` | `StreamLinker`: one-event assignment over the live state |
 | `mules` | `MuleScorer`: fan-in, pass-through and chain detection from transfers |
+| `takeover` | `TakeoverScorer`: new device, impossible travel, failed bursts and shared devices from logins |
 | `io` | JSONL reading and fixed-layout JSON writing |
 | `cli` | `LinkerCli` command-line entry point |
 
