@@ -67,6 +67,22 @@ describe("buildTruth", () => {
     assert.ok(truth.transfer_cases.every((c) => !truth.mule_account_ids.includes(c.account_id)));
   });
 
+  it("lists the planted takeovers and the hard legitimate login cases", () => {
+    assert.deepEqual([...new Set(truth.takeovers.map((t) => t.kind))].sort(),
+      ["credential_stuffing", "password_guessing", "phishing"]);
+    assert.deepEqual(truth.takeover_account_ids, truth.takeovers.map((t) => t.account_id).sort());
+    for (const takeover of truth.takeovers) {
+      assert.deepEqual(Object.keys(takeover), ["account_id", "kind", "attacker_device", "first_bad_login_id",
+        "first_bad_at", "attacker_login_ids"]);
+      assert.ok(takeover.attacker_login_ids.includes(takeover.first_bad_login_id));
+      // A taken-over account still belongs to its customer.
+      assert.equal(truth.account_to_actor[takeover.account_id], `person_${takeover.account_id}`);
+    }
+    assert.deepEqual([...new Set(truth.login_cases.map((c) => c.case))].sort(),
+      ["family_tablet", "forgotten_password", "holiday", "new_phone"]);
+    assert.ok(truth.login_cases.every((c) => !truth.takeover_account_ids.includes(c.account_id)));
+  });
+
   it("only uses the four known kinds", () => {
     const kinds = new Set(truth.actors.map((actor) => actor.kind));
     assert.deepEqual([...kinds].sort(), ["customer", "fraud_ring", "household_member", "office_worker"]);
@@ -77,7 +93,7 @@ describe("writeScenario", () => {
   it("writes byte-identical files for the same seed", () => {
     const first = writeScenario(buildScenario(options), tempDir());
     const second = writeScenario(buildScenario(options), tempDir());
-    for (const name of ["accounts", "constraints", "transfers", "truth"]) {
+    for (const name of ["accounts", "constraints", "transfers", "logins", "truth"]) {
       assert.equal(readFileSync(first[name], "utf8"), readFileSync(second[name], "utf8"), name);
     }
   });
@@ -94,7 +110,7 @@ describe("writeScenario", () => {
     const paths = writeScenario(buildScenario(options), tempDir());
     assert.equal(readFileSync(paths.constraints, "utf8"), "");
     const truth = JSON.parse(readFileSync(paths.truth, "utf8"));
-    assert.equal(truth.schema_version, 2);
+    assert.equal(truth.schema_version, 3);
   });
 
   it("writes transfers as JSON lines, and an empty file when there are none", () => {
@@ -105,13 +121,31 @@ describe("writeScenario", () => {
     assert.ok(lines.every((t) => t.amount_cents > 0 && t.transfer_id.startsWith("s5_t")));
 
     const quiet = writeScenario(buildScenario({ ...options, customers: 0, households: 0, officeWorkers: 0 }),
-      tempDir(), { muleChains: 0, smallBusinesses: 0, ownMoney: 0, paydayBills: 0 });
+      tempDir(), { muleChains: 0, smallBusinesses: 0, ownMoney: 0, paydayBills: 0 },
+      { stuffingCampaigns: 0, phishing: 0, passwordGuessing: 0, newPhone: 0, holiday: 0, forgottenPassword: 0,
+        familyTablets: 0 });
     assert.equal(readFileSync(quiet.transfers, "utf8"), "");
+  });
+
+  it("writes logins as JSON lines", () => {
+    const paths = writeScenario(buildScenario(options), tempDir());
+    const lines = readFileSync(paths.logins, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+    assert.ok(lines.length > 500);
+    assert.ok(lines.every((l) => l.login_id.startsWith("s5_l") && typeof l.success === "boolean"));
   });
 
   it("keeps the sign-ups byte-identical whatever the transfer options", () => {
     const plain = writeScenario(buildScenario(options), tempDir(), { muleChains: 0 });
     const busy = writeScenario(buildScenario(options), tempDir(), { muleChains: 4, smallBusinesses: 3 });
     assert.equal(readFileSync(plain.accounts, "utf8"), readFileSync(busy.accounts, "utf8"));
+  });
+
+  it("keeps the sign-ups and transfers byte-identical whatever the login options", () => {
+    const plain = writeScenario(buildScenario(options), tempDir(), {}, { phishing: 0, loginDays: 14 });
+    const busy = writeScenario(buildScenario(options), tempDir(), {}, { phishing: 6, stuffingTargets: 25 });
+    for (const name of ["accounts", "transfers"]) {
+      assert.equal(readFileSync(plain[name], "utf8"), readFileSync(busy[name], "utf8"), name);
+    }
+    assert.notEqual(readFileSync(plain.logins, "utf8"), readFileSync(busy.logins, "utf8"));
   });
 });
