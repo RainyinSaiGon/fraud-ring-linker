@@ -15,7 +15,12 @@ import io.github.rainyinsaigon.fraudlinker.service.persistence.AccountRepository
 import io.github.rainyinsaigon.fraudlinker.service.app.MergeProposal;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.ConstraintRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.MergeProposalRepository;
+import io.github.rainyinsaigon.fraudlinker.service.persistence.LoginRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.TransferRepository;
+import io.github.rainyinsaigon.fraudlinker.takeover.Login;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverConfig;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverScore;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverScorer;
 import io.github.rainyinsaigon.fraudlinker.streaming.StreamLinker;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -45,7 +50,8 @@ import java.util.function.Function;
  *
  * <p>Transfers are kept here too, for mule scoring. They never change the
  * linking state; scores are read from it (accounts in one cluster are related)
- * and are cached until the state or the transfers change.
+ * and are cached until the state or the transfers change. Logins are kept the
+ * same way, for takeover scoring.
  *
  * <p>One lock guards everything, including reads, because the engine is
  * single-threaded by design (union-find lookups compress paths, even on reads).
@@ -60,7 +66,9 @@ public class LinkerEngine {
     private final ConstraintRepository constraints;
     private final MergeProposalRepository mergeProposals;
     private final TransferRepository transferRepository;
+    private final LoginRepository loginRepository;
     private final MuleScorer muleScorer = new MuleScorer(MuleConfig.defaults());
+    private final TakeoverScorer takeoverScorer = new TakeoverScorer(TakeoverConfig.defaults());
     private final ReentrantLock lock = new ReentrantLock();
 
     /** Guarded by {@link #lock}. Null while unavailable. */
@@ -72,13 +80,20 @@ public class LinkerEngine {
     /** Guarded by {@link #lock}. Scores of held accounts, valid while {@link #scoresFingerprint} matches. */
     private Map<String, MuleScore> muleScores;
     private long scoresFingerprint;
+    /** Guarded by {@link #lock}. Every stored login, in arrival order. */
+    private List<Login> logins = new ArrayList<>();
+    /** Guarded by {@link #lock}. Scores of held accounts, valid while {@link #takeoverFingerprint} matches. */
+    private Map<String, TakeoverScore> takeoverScores;
+    private long takeoverFingerprint;
 
     public LinkerEngine(AccountRepository accounts, ConstraintRepository constraints,
-                        MergeProposalRepository mergeProposals, TransferRepository transferRepository) {
+                        MergeProposalRepository mergeProposals, TransferRepository transferRepository,
+                        LoginRepository loginRepository) {
         this.accounts = accounts;
         this.constraints = constraints;
         this.mergeProposals = mergeProposals;
         this.transferRepository = transferRepository;
+        this.loginRepository = loginRepository;
     }
 
     @PostConstruct
@@ -110,7 +125,17 @@ public class LinkerEngine {
          */
         Map<String, MuleScore> muleScores();
 
-        /** Changes whenever the linking state or the transfers change. */
+        /** Adds a login that the caller has just stored in the database. */
+        void addLogin(Login login);
+
+        /**
+         * Takeover scores of every account the bank holds that has logins, by
+         * account ID. Logins for accounts not held yet are kept, and count once the
+         * account registers.
+         */
+        Map<String, TakeoverScore> takeoverScores();
+
+        /** Changes whenever the linking state, the transfers or the logins change. */
         long fingerprint();
 
         /** Discards the in-memory state and relinks everything from the database. */
@@ -155,6 +180,16 @@ public class LinkerEngine {
                 }
 
                 @Override
+                public void addLogin(Login login) {
+                    logins.add(login);
+                }
+
+                @Override
+                public Map<String, TakeoverScore> takeoverScores() {
+                    return LinkerEngine.this.takeoverScores();
+                }
+
+                @Override
                 public long fingerprint() {
                     return LinkerEngine.this.fingerprint();
                 }
@@ -182,7 +217,23 @@ public class LinkerEngine {
     /** Caller must hold the lock. */
     private long fingerprint() {
         return state.store().size() * 1_000_003L + state.constraints().pairCount()
-                + state.clusterCount() * 1_000_000_007L + transfers.size() * 998_244_353L;
+                + state.clusterCount() * 1_000_000_007L + transfers.size() * 998_244_353L + logins.size() * 754_974_721L;
+    }
+
+    /** Caller must hold the lock. */
+    private Map<String, TakeoverScore> takeoverScores() {
+        long now = fingerprint();
+        if (takeoverScores == null || takeoverFingerprint != now) {
+            Map<String, TakeoverScore> held = new LinkedHashMap<>();
+            takeoverScorer.scoreAll(logins, MuleScorer.sameCluster(state)).forEach((accountId, score) -> {
+                if (state.store().indexOf(accountId) >= 0) {
+                    held.put(accountId, score);
+                }
+            });
+            takeoverScores = Collections.unmodifiableMap(held);
+            takeoverFingerprint = now;
+        }
+        return takeoverScores;
     }
 
     /** Caller must hold the lock. */
@@ -220,18 +271,23 @@ public class LinkerEngine {
                 }
             }
             List<Transfer> storedTransfers = new ArrayList<>(transferRepository.findAll());
+            List<Login> storedLogins = new ArrayList<>(loginRepository.findAll());
             state = rebuilt;
             streamLinker = new StreamLinker(rebuilt);
             transfers = storedTransfers;
             muleScores = null;
+            logins = storedLogins;
+            takeoverScores = null;
             log.info("Linked {} accounts with {} verified-distinct pairs and {} accepted merges, and loaded {} "
-                            + "transfers, in {} ms", stored.size(), pairs.size(), accepted.size(),
-                    storedTransfers.size(), (System.nanoTime() - start) / 1_000_000);
+                            + "transfers and {} logins, in {} ms", stored.size(), pairs.size(), accepted.size(),
+                    storedTransfers.size(), storedLogins.size(), (System.nanoTime() - start) / 1_000_000);
         } catch (RuntimeException e) {
             state = null;
             streamLinker = null;
             transfers = new ArrayList<>();
             muleScores = null;
+            logins = new ArrayList<>();
+            takeoverScores = null;
             log.error("Could not load linking state from the database; requests will fail until it can", e);
             throw new EngineUnavailableException(e);
         }

@@ -57,7 +57,7 @@ validation).
 | Method and path | What it does |
 |---|---|
 | `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence, **risk action**, and the IDs of any merge proposals it opened. 201, or 409 if the ID exists. |
-| `GET /api/v1/accounts/{id}` | The account, its cluster, current risk action, and its mule score and reasons. |
+| `GET /api/v1/accounts/{id}` | The account, its cluster, its own risk action (including takeover rules), and its mule and takeover scores and reasons. |
 | `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
 | `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, which pairs are linked by which rule and shared signals, and members' mule scores. |
 | `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","analyst":"...","note":"..."}`. Covers every current member. |
@@ -70,6 +70,11 @@ validation).
 | `POST /api/v1/transfers` | `{"transfers":[{"transfer_id","from_account","to_account","amount_cents","occurred_at"}]}`, 1 to 500, stored all or nothing. Either side may be outside the bank. Returns the accounts flagged for the first time and the touched accounts' mule scores. 201, or 409 for a repeated `transfer_id`. |
 | `GET /api/v1/mules?limit=` | Likely mules no analyst has decided on since they were flagged, highest score first. |
 | `GET /api/v1/accounts/{id}/transfers?limit=` | Money into and out of an account, newest first, with `direction` `IN` or `OUT`. |
+| `POST /api/v1/logins` | `{"logins":[{"login_id","account_id","device_id","ip","success","occurred_at","latitude","longitude"}]}`, 1 to 500, stored all or nothing. The location is optional, but both coordinates or neither. Returns the accounts flagged for the first time and the touched accounts' takeover scores. 201, or 409 for a repeated `login_id`. |
+| `GET /api/v1/takeovers?limit=` | Possible takeovers no analyst has decided on since they were flagged, highest score first, with when the score was reached. |
+| `GET /api/v1/accounts/{id}/logins?limit=` | An account's logins, newest first. |
+| `POST /api/v1/accounts/{id}/takeover-decisions` | `{"outcome":"CONFIRMED_TAKEOVER"\|"NOT_TAKEOVER","analyst":"...","note":"..."}`. Covers this account only, never the rest of its cluster. |
+| `GET /api/v1/accounts/{id}/takeover-decisions?limit=` | The account's takeover decisions, newest first. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |
 
 Example:
@@ -89,6 +94,8 @@ restriction hurts a real customer, so restriction needs an analyst. First match 
 | Situation | Action |
 |---|---|
 | Latest decision on any member is `CONFIRMED_FRAUD` | `RESTRICT`, including accounts that join later |
+| This account's latest takeover decision is `CONFIRMED_TAKEOVER` | `STEP_UP`, this account only |
+| This account is flagged as a possible takeover, and no takeover decision since the flag | `REVIEW`, even for a single account |
 | A member is flagged as a likely mule, and no `NOT_FRAUD` decision since the flag covers it | `REVIEW` |
 | Latest decision is `NOT_FRAUD` and covered every current member | `ALLOW` |
 | Latest decision is `NOT_FRAUD` but accounts joined since | `REVIEW` |
@@ -97,6 +104,12 @@ restriction hurts a real customer, so restriction needs an analyst. First match 
 
 The payoff is the first row: once a ring is confirmed, a fresh account using the
 ring's card or device is restricted the moment it signs up.
+
+The two takeover rows apply to one account, in its own response (`GET` and
+`POST /api/v1/accounts`). A takeover harms one real customer, so a cluster's
+action, and the other members', ignore them. `STEP_UP` means: ask for strong
+re-verification before the next login or payment. A later `NOT_TAKEOVER` is how
+a re-verified customer is recorded, and ends it.
 
 ### Design decisions
 
@@ -146,6 +159,21 @@ ring's card or device is restricted the moment it signs up.
     rebuild, and rescored in full after each change. That is fine at demo scale;
     incremental scoring of the touched accounts and their neighbours would be the
     next step.
+- **Logins are evidence of who is using an account, not of who owns it.** They
+  never change a cluster; they only feed takeover scoring (new device,
+  impossible travel, failed bursts, shared device; see `engine/README.md`):
+  - Only accounts the bank holds are scored and flagged. Logins for an account
+    that has not registered yet are kept, and it is flagged when it registers.
+  - A flag makes that account `REVIEW`. Only an analyst's `CONFIRMED_TAKEOVER`
+    steps it up.
+  - The first flag is recorded in `takeover_flags` and audited once as
+    `takeover.flagged`. Decisions are stored in `takeover_decisions` and audited
+    as `takeover.decided`.
+  - As for mule flags, only the first flag time is kept, so a `NOT_TAKEOVER`
+    also answers a later incident on the same account. Re-flagging after a new
+    incident would be the next step.
+  - Logins are kept in memory like transfers, reloaded on every rebuild, and
+    rescored in full after each change.
 
 ### Not built yet
 

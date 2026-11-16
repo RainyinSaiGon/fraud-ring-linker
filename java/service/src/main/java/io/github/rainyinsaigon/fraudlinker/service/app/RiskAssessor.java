@@ -5,10 +5,16 @@ import io.github.rainyinsaigon.fraudlinker.mules.MuleScore;
 import io.github.rainyinsaigon.fraudlinker.service.engine.LinkerEngine;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.DecisionRepository;
 import io.github.rainyinsaigon.fraudlinker.service.persistence.MuleFlagRepository;
+import io.github.rainyinsaigon.fraudlinker.service.persistence.TakeoverDecisionRepository;
+import io.github.rainyinsaigon.fraudlinker.service.persistence.TakeoverFlagRepository;
 import io.github.rainyinsaigon.fraudlinker.service.risk.AnalystDecision;
 import io.github.rainyinsaigon.fraudlinker.service.risk.MuleFlag;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskPolicy;
+import io.github.rainyinsaigon.fraudlinker.service.risk.TakeoverDecision;
+import io.github.rainyinsaigon.fraudlinker.service.risk.TakeoverFlag;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverReason;
+import io.github.rainyinsaigon.fraudlinker.takeover.TakeoverScore;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -18,15 +24,50 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/** Gathers what {@link RiskPolicy} needs for a cluster: its latest decision and its mule flags. */
+/**
+ * Gathers what {@link RiskPolicy} needs: for a cluster, its latest decision and
+ * its mule flags; for one account, also its takeover flag and takeover decision.
+ */
 @Component
 public class RiskAssessor {
     private final DecisionRepository decisions;
     private final MuleFlagRepository flags;
+    private final TakeoverFlagRepository takeoverFlags;
+    private final TakeoverDecisionRepository takeoverDecisions;
 
-    public RiskAssessor(DecisionRepository decisions, MuleFlagRepository flags) {
+    public RiskAssessor(DecisionRepository decisions, MuleFlagRepository flags, TakeoverFlagRepository takeoverFlags,
+                        TakeoverDecisionRepository takeoverDecisions) {
         this.decisions = decisions;
         this.flags = flags;
+        this.takeoverFlags = takeoverFlags;
+        this.takeoverDecisions = takeoverDecisions;
+    }
+
+    /** The action for one account, including its own takeover rules. Caller must be inside the engine lock. */
+    public RiskAssessment assessAccount(LinkerEngine.Session session, String accountId, List<String> members) {
+        return assessAccount(session, accountId, members, takeoverDecisions.findLatest(accountId));
+    }
+
+    /** Caller must be inside the engine lock. */
+    public RiskAssessment assessAccount(LinkerEngine.Session session, String accountId, List<String> members,
+                                        Optional<TakeoverDecision> takeoverDecision) {
+        return RiskPolicy.assessAccount(accountId, members, decisions.findLatestCovering(members),
+                muleFlags(session, members), takeoverFlag(session, accountId), takeoverDecision);
+    }
+
+    /** The account's takeover flag, if its logins currently look like a takeover. */
+    public Optional<TakeoverFlag> takeoverFlag(LinkerEngine.Session session, String accountId) {
+        TakeoverScore score = session.takeoverScores().get(accountId);
+        if (score == null || !score.flagged()) {
+            return Optional.empty();
+        }
+        Instant flaggedAt = takeoverFlags.findFlaggedAt(List.of(accountId)).get(accountId);
+        return Optional.of(new TakeoverFlag(accountId, score.score(), describe(score), flaggedAt));
+    }
+
+    /** The reasons in plain words, for example "first login from a new device after 11 logins". */
+    public static String describe(TakeoverScore score) {
+        return score.reasons().stream().map(TakeoverReason::describe).collect(Collectors.joining(", "));
     }
 
     /** Caller must be inside the engine lock. */
