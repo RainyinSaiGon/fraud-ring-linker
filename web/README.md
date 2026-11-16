@@ -23,8 +23,9 @@ needs no CORS setup. Set `API_TARGET` to point it elsewhere.
 
 | URL | What it shows |
 |---|---|
-| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first; then likely mules waiting for a decision ("Possible mules"); then open merge proposals ("Possible split rings") |
+| `#/` | **Review queue:** linked clusters still marked REVIEW, largest first; then accounts that may have been taken over ("Possible takeovers"); then likely mules waiting for a decision ("Possible mules"); then open merge proposals ("Possible split rings") |
 | `#/clusters/c12` | **Cluster:** members, each link's rule and shared signals in plain words, the recommended action and why, the decision form, the history, and each member's money movement: mule score, signals in plain words, and recent transfers on request |
+| `#/accounts/<id>` | **Account:** its own action and why, its takeover score and signals in plain words, recent logins (time, device, place, result) with each signal named next to the login that showed it, the takeover decision form, and the account's history. Account IDs on the cluster page link here |
 | `#/proposals/<id>` | **Merge proposal:** the accounts on each side, the new account and rule that link them, and Merge clusters / Keep apart |
 
 Design choices:
@@ -35,6 +36,13 @@ Design choices:
   25 min, 90% sent on within 30 min") so the analyst can judge them, and only a
   decision restricts it. Possible mules get their own list because most are single
   accounts, which the cluster queue (two or more accounts) never shows.
+- **A takeover is about one customer.** Possible takeovers link to the account,
+  not its cluster, and the takeover decision covers that account only. The form
+  says so: confirming shows **Step up** (the customer must re-verify) on this
+  account, and the other accounts in its cluster keep their own action. "Not a
+  takeover" is also how a re-verified customer is recorded.
+- **Signals are named on the login that showed them,** for example "New device"
+  and "Impossible jump: 13,361 km in 1 h", in words as well as a highlighted row.
 - **Split rings wait for a person.** Streaming never merges two clusters by itself.
   When a new account links strongly to two, the page lists the pair, and an
   analyst merges them or keeps them apart. Merging needs a name like any decision,

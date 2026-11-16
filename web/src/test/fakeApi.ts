@@ -1,12 +1,18 @@
 import { vi } from "vitest";
 import type {
+  AccountDetail,
   ClusterDetail,
   ClusterSummary,
   DecisionResult,
   MergeAcceptResult,
   MergeProposal,
   MuleScore,
+  Login,
   MuleSummary,
+  TakeoverDecisionResult,
+  TakeoverOutcome,
+  TakeoverReason,
+  TakeoverSummary,
   Transfer,
 } from "../api";
 
@@ -136,4 +142,69 @@ export const transferItem = (overrides: Partial<Transfer> = {}): Transfer => ({
   occurred_at: "2026-11-14T03:10:00Z",
   direction: "IN",
   ...overrides,
+});
+
+export const NEW_DEVICE_AT = "2026-11-14T10:45:00Z";
+
+export const takeoverReasons = (): TakeoverReason[] => [
+  { code: "new_device", description: "first login from a new device after 7 logins", at: NEW_DEVICE_AT },
+  { code: "impossible_travel", description: "16,990 km in 45 min (22,653 km/h)", at: NEW_DEVICE_AT },
+];
+
+export const accountDetail = (overrides: Partial<AccountDetail> = {}): AccountDetail => ({
+  account_id: "acc_1",
+  email: "acc.1@example.com",
+  device_id: "dev_own",
+  ip: "10.0.0.1",
+  payment_fingerprint: "card_1",
+  created_at: "2026-11-01T09:00:00Z",
+  cluster_id: "c7",
+  cluster_size: 2,
+  risk_action: "REVIEW",
+  reason: "Account acc_1 may have been taken over: first login from a new device after 7 logins.",
+  mule_score: 0,
+  mule_flagged: false,
+  mule_reasons: [],
+  takeover_score: 0.82,
+  takeover_flagged: true,
+  takeover_reasons: takeoverReasons(),
+  ...overrides,
+});
+
+export const takeoverSummary = (overrides: Partial<TakeoverSummary> = {}): TakeoverSummary => ({
+  account_id: "acc_1",
+  cluster_id: "c7",
+  cluster_size: 2,
+  takeover_score: 0.82,
+  takeover_reasons: takeoverReasons(),
+  flagged_at: "2026-11-14T10:46:00Z",
+  reached_at: NEW_DEVICE_AT,
+  risk_action: "REVIEW",
+  reason: "Account acc_1 may have been taken over: first login from a new device after 7 logins.",
+  ...overrides,
+});
+
+export const loginItem = (overrides: Partial<Login> = {}): Login => ({
+  login_id: "l1",
+  account_id: "acc_1",
+  device_id: "dev_own",
+  ip: "10.0.0.1",
+  success: true,
+  occurred_at: "2026-11-14T10:00:00Z",
+  latitude: -33.87,
+  longitude: 151.21,
+  ...overrides,
+});
+
+export const takeoverDecisionResult = (analyst: string, outcome: TakeoverOutcome): TakeoverDecisionResult => ({
+  decision: {
+    decision_id: "td1",
+    account_id: "acc_1",
+    outcome,
+    analyst,
+    note: null,
+    decided_at: "2026-11-14T11:00:00Z",
+  },
+  risk_action: outcome === "CONFIRMED_TAKEOVER" ? "STEP_UP" : "ALLOW",
+  reason: "",
 });

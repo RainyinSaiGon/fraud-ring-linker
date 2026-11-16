@@ -35,6 +35,7 @@ describe("review queue", () => {
   it("lists clusters waiting for review with links to each one", async () => {
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [queueItem(), queueItem({ cluster_id: "c9", size: 2 })] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
@@ -61,6 +62,7 @@ describe("review queue", () => {
     mockFetch({
       "/api/v1/clusters?": () =>
         up ? { body: [queueItem()] } : { status: 503, body: { title: "Service unavailable", detail: "Linking is temporarily unavailable. Retry later." } },
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
@@ -179,6 +181,7 @@ describe("merge proposals in the queue", () => {
   it("lists open proposals with the evidence and a link to review each one", async () => {
     const { calls } = mockFetch({
       "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () => ({ body: [proposal()] }),
     });
@@ -201,6 +204,7 @@ describe("merge proposals in the queue", () => {
     let up = false;
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [queueItem()] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [] }),
       "/api/v1/merge-proposals?": () =>
         up ? { body: [proposal()] } : { status: 503, body: { detail: "Linking is temporarily unavailable. Retry later." } },
@@ -348,6 +352,7 @@ describe("possible mules in the queue", () => {
   it("lists flagged accounts with their signals and a link to their cluster", async () => {
     const { calls } = mockFetch({
       "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [muleSummary(), muleSummary({ account_id: "acc_9", cluster_id: "c9", cluster_size: 3, mule_score: 0.85 })] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
@@ -368,6 +373,7 @@ describe("possible mules in the queue", () => {
     let up = false;
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [queueItem()] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => (up ? { body: [] } : { status: 503, body: { detail: "Linking is temporarily unavailable. Retry later." } }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
@@ -384,6 +390,7 @@ describe("possible mules in the queue", () => {
   it("shows when a flag has no recorded time yet", async () => {
     mockFetch({
       "/api/v1/clusters?": () => ({ body: [] }),
+      "/api/v1/takeovers?": () => ({ body: [] }),
       "/api/v1/mules?": () => ({ body: [muleSummary({ flagged_at: null })] }),
       "/api/v1/merge-proposals?": () => ({ body: [] }),
     });
