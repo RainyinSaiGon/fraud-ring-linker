@@ -49,7 +49,7 @@ abstract class LoginApiScenarios extends TransferApiScenarios {
 
     ValidatableResponse decideTakeover(String accountId, String outcome) {
         return given().contentType(ContentType.JSON)
-                .body("{\"outcome\":\"" + outcome + "\",\"analyst\":\"analyst-" + run + "\",\"note\":\"called them\"}")
+                .body("{\"outcome\":\"" + outcome + "\",\"note\":\"called them\"}")
                 .post("/api/v1/accounts/{id}/takeover-decisions", accountId)
                 .then();
     }
@@ -300,7 +300,8 @@ abstract class LoginApiScenarios extends TransferApiScenarios {
         }
         sendLogins(tooMany).statusCode(400);
         decideTakeover(a, "MAYBE").statusCode(400);
-        given().contentType(ContentType.JSON).body("{\"outcome\":\"NOT_TAKEOVER\"}")
+        given().contentType(ContentType.JSON)
+                .body("{\"outcome\":\"NOT_TAKEOVER\",\"note\":\"" + "x".repeat(2001) + "\"}")
                 .post("/api/v1/accounts/{id}/takeover-decisions", a).then().statusCode(400);
         given().queryParam("limit", 0).get("/api/v1/takeovers").then().statusCode(400);
         given().queryParam("limit", 501).get("/api/v1/accounts/{id}/logins", a).then().statusCode(400);

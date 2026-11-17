@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type MergeAcceptResult, type MergeProposal } from "../api";
 import { dateTime, percent, ruleLabel } from "../labels";
+import { DecidingAs } from "./DecidingAs";
 import { clusterName } from "./ProposalList";
 import { RiskBadge } from "./RiskBadge";
 
@@ -151,22 +152,21 @@ interface FormProps {
   onRejected: (proposal: MergeProposal) => void;
 }
 
-/** Like the cluster decision form: both choices need a name, because the audit log must say who decided. */
+/** Like the cluster decision form: the service records the signed-in analyst as who decided. */
 function ProposalDecisionForm({ proposalId, onAccepted, onRejected }: FormProps) {
-  const [analyst, setAnalyst] = useState("");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<Choice | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ready = analyst.trim() !== "" && pending === null;
+  const ready = pending === null;
 
   async function decide(choice: Choice) {
     setPending(choice);
     setError(null);
     try {
       if (choice === "accept") {
-        onAccepted(await api.acceptProposal(proposalId, analyst.trim(), note));
+        onAccepted(await api.acceptProposal(proposalId, note));
       } else {
-        onRejected(await api.rejectProposal(proposalId, analyst.trim(), note));
+        onRejected(await api.rejectProposal(proposalId, note));
       }
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.message : "The decision was not saved.");
@@ -182,15 +182,7 @@ function ProposalDecisionForm({ proposalId, onAccepted, onRejected }: FormProps)
     <form className="card" onSubmit={submit} aria-labelledby="proposal-decision-heading">
       <h2 id="proposal-decision-heading">Decision</h2>
       <p className="muted">Merging puts every account on both sides in one cluster. It cannot be undone here.</p>
-      <label htmlFor="proposal-analyst">Your name</label>
-      <input
-        id="proposal-analyst"
-        autoComplete="name"
-        value={analyst}
-        maxLength={128}
-        required
-        onChange={(event) => setAnalyst(event.target.value)}
-      />
+      <DecidingAs />
       <label htmlFor="proposal-note">Note (optional)</label>
       <textarea id="proposal-note" rows={3} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} />
       {error && (

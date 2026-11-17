@@ -16,8 +16,8 @@ browsers, layout, keyboard use, and behaviour over time.
 |---|---|---|
 | M1 | Open the review queue | Only clusters with 2+ accounts and no current decision are listed, largest first |
 | M2 | Open a cluster from the queue | Members, confidence, recommended action and each link's rule and shared signals are shown |
-| M3 | Try to decide with an empty name, or only spaces | Both buttons stay disabled; nothing is sent |
-| M4 | Confirm fraud with a name and a note | Action changes to Restrict; the history shows the decision with your name; the cluster leaves the queue |
+| M3 | Look at a decision form | There's no name field; it says "Deciding as" with the name from your token |
+| M4 | Confirm fraud with a note | Action changes to Restrict; the history shows the decision with your signed-in name; the cluster leaves the queue |
 | M5 | Mark a different cluster as not fraud | Action changes to Allow; the cluster leaves the queue |
 | M6 | Run `npm run extra-ring-member -- --ring N` for a ring you confirmed | The new account arrives as RESTRICT without any analyst action |
 | M7 | Send a new sign-up into a cluster cleared as not fraud | The cluster returns to the queue as REVIEW, with "joined since" in the reason |

@@ -78,6 +78,23 @@ gets a 403. Both are problem responses that don't say which check failed.
 so a new endpoint is closed until someone adds it to `SecurityConfig` (a test
 fails if they don't).
 
+### Who acted
+
+Who acted always comes from the token, never the request body:
+
+- **A decision** (cluster, merge proposal or takeover) records the analyst:
+  `preferred_username`, or `sub` when that's missing, blank or over 128
+  characters.
+- **Everything an ingest call causes** records the client that sent it: `azp`,
+  then `client_id`, then `sub`. That covers `account.linked`, `merge.proposed`,
+  `mule.flagged`, `takeover.flagged` and `constraint.added`, so the audit log
+  says which system's data raised each flag. Events stored before this change
+  say `system`.
+- A body that still sends `analyst` or `actor` gets a 400 ("comes from your
+  sign-in; remove it from the request"), so an old client fails loudly instead
+  of having its name silently replaced.
+- A token needs a `sub` of 1 to 128 characters, or it gets a 401.
+
 For local runs, [`tools/dev-auth`](../tools/dev-auth/) plays the identity
 provider: it makes a key pair in a folder you choose and signs short-lived tokens.
 
@@ -97,20 +114,20 @@ validation).
 | `GET /api/v1/accounts/{id}` | The account, its cluster, its own risk action (including takeover rules), and its mule and takeover scores and reasons. |
 | `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
 | `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, which pairs are linked by which rule and shared signals, and members' mule scores. |
-| `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","analyst":"...","note":"..."}`. Covers every current member. |
+| `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","note":"..."}`. Covers every current member. |
 | `GET /api/v1/clusters/{id}/decisions` | Decision history for the cluster's current members. |
-| `POST /api/v1/constraints` | `{"account_a","account_b","actor"}`: two accounts are different people (for example, both passed identity checks). 201 new, 200 already known, 409 if they are already linked. |
+| `POST /api/v1/constraints` | `{"account_a","account_b"}`: two accounts are different people (for example, both passed identity checks). 201 new, 200 already known, 409 if they are already linked. |
 | `GET /api/v1/merge-proposals?status=OPEN&limit=` | Merge proposals (`OPEN`, `ACCEPTED` or `REJECTED`), oldest first, with each side's accounts and current cluster. |
 | `GET /api/v1/merge-proposals/{id}` | One proposal, in any status. |
-| `POST /api/v1/merge-proposals/{id}/accept` | `{"analyst","note"}`: merges the clusters both sides are in now. 409 if already decided, or if a verified-distinct pair would end up together. |
-| `POST /api/v1/merge-proposals/{id}/reject` | `{"analyst","note"}`: keeps the clusters apart; the same pair is not proposed again. |
+| `POST /api/v1/merge-proposals/{id}/accept` | `{"note"}`: merges the clusters both sides are in now. 409 if already decided, or if a verified-distinct pair would end up together. |
+| `POST /api/v1/merge-proposals/{id}/reject` | `{"note"}`: keeps the clusters apart; the same pair is not proposed again. |
 | `POST /api/v1/transfers` | `{"transfers":[{"transfer_id","from_account","to_account","amount_cents","occurred_at"}]}`, 1 to 500, stored all or nothing. Either side may be outside the bank. Returns the accounts flagged for the first time and the touched accounts' mule scores. 201, or 409 for a repeated `transfer_id`. |
 | `GET /api/v1/mules?limit=` | Likely mules no analyst has decided on since they were flagged, highest score first. |
 | `GET /api/v1/accounts/{id}/transfers?limit=` | Money into and out of an account, newest first, with `direction` `IN` or `OUT`. |
 | `POST /api/v1/logins` | `{"logins":[{"login_id","account_id","device_id","ip","success","occurred_at","latitude","longitude"}]}`, 1 to 500, stored all or nothing. The location is optional, but both coordinates or neither. Returns the accounts flagged for the first time and the touched accounts' takeover scores. 201, or 409 for a repeated `login_id`. |
 | `GET /api/v1/takeovers?limit=` | Possible takeovers no analyst has decided on since they were flagged, highest score first, with when the score was reached. |
 | `GET /api/v1/accounts/{id}/logins?limit=` | An account's logins, newest first. |
-| `POST /api/v1/accounts/{id}/takeover-decisions` | `{"outcome":"CONFIRMED_TAKEOVER"\|"NOT_TAKEOVER","analyst":"...","note":"..."}`. Covers this account only, never the rest of its cluster. |
+| `POST /api/v1/accounts/{id}/takeover-decisions` | `{"outcome":"CONFIRMED_TAKEOVER"\|"NOT_TAKEOVER","note":"..."}`. Covers this account only, never the rest of its cluster. |
 | `GET /api/v1/accounts/{id}/takeover-decisions?limit=` | The account's takeover decisions, newest first. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |
 
@@ -215,8 +232,6 @@ a re-verified customer is recorded, and ends it.
 
 ### Not built yet
 
-- The analyst's name from the token. Tokens and roles are checked, but `analyst`
-  and `actor` still come from the request body (#68).
 - PII handling. Responses include raw emails and IPs; mask them per role.
 - Pagination beyond `limit`.
 - Horizontal scaling. State is per instance, so run a single writer.

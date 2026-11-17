@@ -40,8 +40,9 @@ export function createClient(baseUrl, fetchImpl = fetch, token = undefined) {
     recordTransfers: (transfers) => request("POST", "/api/v1/transfers", { transfers }),
     reviewQueue: (limit = 500) => request("GET", `/api/v1/clusters?limit=${limit}`),
     cluster: (clusterId) => request("GET", `/api/v1/clusters/${encodeURIComponent(clusterId)}`),
-    decide: (clusterId, outcome, analyst, note) =>
-      request("POST", `/api/v1/clusters/${encodeURIComponent(clusterId)}/decisions`, { outcome, analyst, note }),
+    // The service records the token's analyst as who decided.
+    decide: (clusterId, outcome, note) =>
+      request("POST", `/api/v1/clusters/${encodeURIComponent(clusterId)}/decisions`, { outcome, note }),
     health: () => request("GET", "/actuator/health"),
   };
 }

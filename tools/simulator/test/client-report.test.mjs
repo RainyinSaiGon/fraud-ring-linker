@@ -50,9 +50,9 @@ describe("createClient", () => {
 
   it("encodes cluster IDs in paths", async () => {
     const { fetchImpl, calls } = fakeFetch(() => ({ status: 201, body: {} }));
-    await createClient("http://svc", fetchImpl).decide("c 1", "NOT_FRAUD", "ana", "ok");
+    await createClient("http://svc", fetchImpl).decide("c 1", "NOT_FRAUD", "ok");
     assert.equal(calls[0].url, "http://svc/api/v1/clusters/c%201/decisions");
-    assert.deepEqual(calls[0].body, { outcome: "NOT_FRAUD", analyst: "ana", note: "ok" });
+    assert.deepEqual(calls[0].body, { outcome: "NOT_FRAUD", note: "ok" });
   });
 });
 

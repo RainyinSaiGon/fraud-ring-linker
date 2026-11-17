@@ -26,9 +26,6 @@ public class AuditRepository {
     public static final String TAKEOVER_FLAGGED = "takeover.flagged";
     public static final String TAKEOVER_DECIDED = "takeover.decided";
 
-    /** Actor for automated decisions made by the engine. */
-    public static final String SYSTEM = "system";
-
     private final JdbcClient jdbc;
     private final JsonMapper json;
 

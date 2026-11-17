@@ -61,15 +61,14 @@ test("an analyst merges a ring that arrived split, and it becomes one cluster", 
   await expect(page.getByText(`e2e_${run}_r2`)).toBeVisible();
 
   const merge = page.getByRole("button", { name: "Merge clusters" });
-  await expect(merge).toBeDisabled();
-  await page.getByLabel("Your name").fill("E2E Analyst");
+  await expect(page.getByText("Deciding as")).toContainText("e2e-analyst");
   await page.getByLabel("Note (optional)").fill("Same phone and card");
   await merge.click();
 
   const result = page.getByTestId("merge-result");
   await expect(result).toContainText("Clusters merged");
   await expect(result).toContainText("now has 3 accounts");
-  await expect(page.getByText(/Merged by E2E Analyst/)).toBeVisible();
+  await expect(page.getByText(/Merged by e2e-analyst/)).toBeVisible();
 
   // The merged cluster holds the whole ring, under one of the two old IDs.
   await result.getByRole("link").click();
@@ -81,7 +80,7 @@ test("an analyst merges a ring that arrived split, and it becomes one cluster", 
   for (const member of ["r1", "r2", "r3"]) {
     await expect(accounts.filter({ hasText: `e2e_${run}_${member}` })).toHaveCount(1);
   }
-  await expect(page.getByText("E2E Analyst merged clusters")).toBeVisible();
+  await expect(page.getByText("e2e-analyst merged clusters")).toBeVisible();
 
   // The decided proposal leaves the queue.
   await page.getByRole("link", { name: "← Review queue" }).click();
@@ -94,10 +93,9 @@ test("an analyst keeps a proposed pair apart", async ({ page, request }) => {
   const { proposalId } = await seedSplitRing(request, run);
 
   await page.goto(`/#/proposals/${proposalId}`);
-  await page.getByLabel("Your name").fill("E2E Analyst");
   await page.getByRole("button", { name: "Keep apart" }).click();
 
-  await expect(page.getByText(/Kept apart by E2E Analyst/)).toBeVisible();
+  await expect(page.getByText(/Kept apart by e2e-analyst/)).toBeVisible();
   await expect(page.getByText("This pair will not be proposed again.")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Kept apart", { exact: true })).toBeVisible();

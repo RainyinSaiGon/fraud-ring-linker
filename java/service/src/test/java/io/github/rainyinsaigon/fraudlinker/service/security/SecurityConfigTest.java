@@ -40,6 +40,26 @@ class SecurityConfigTest {
         assertThat(roles(null)).isEmpty();
     }
 
+    private static Jwt claims(Map<String, Object> claims) {
+        Jwt.Builder builder = Jwt.withTokenValue("t").header("alg", "RS256");
+        claims.forEach(builder::claim);
+        return builder.build();
+    }
+
+    @Test
+    void namesThePersonAndTheClientFromTheToken() {
+        assertThat(Caller.person(claims(Map.of("sub", "u1", "preferred_username", " alice ")))).isEqualTo("alice");
+        assertThat(Caller.person(claims(Map.of("sub", "u1", "preferred_username", 42)))).isEqualTo("u1");
+        assertThat(Caller.client(claims(Map.of("sub", "u1", "azp", "kyc", "client_id", "other")))).isEqualTo("kyc");
+        assertThat(Caller.client(claims(Map.of("sub", "u1", "azp", "", "client_id", "onboarding"))))
+                .isEqualTo("onboarding");
+        assertThat(Caller.client(claims(Map.of("sub", "u1")))).isEqualTo("u1");
+        assertThatThrownBy(() -> Caller.person(claims(Map.of("sub", " ")))).isInstanceOf(IllegalStateException.class);
+        assertThat(Caller.usable("x".repeat(128))).isTrue();
+        assertThat(Caller.usable("x".repeat(129))).isFalse();
+        assertThat(Caller.usable(null)).isFalse();
+    }
+
     @Test
     void needsExactlyOneKeySource() {
         SecurityConfig config = new SecurityConfig();

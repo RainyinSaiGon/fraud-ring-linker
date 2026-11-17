@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.clustering.Constraints;
 import io.github.rainyinsaigon.fraudlinker.clustering.LinkState.ConstraintOutcome;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.ConstraintRequest;
@@ -8,6 +9,8 @@ import io.github.rainyinsaigon.fraudlinker.service.app.ConstraintService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,9 +30,10 @@ public class ConstraintController {
      * was already known, 409 when the two are already linked in one cluster.
      */
     @PostMapping
-    public ResponseEntity<ConstraintResponse> add(@Valid @RequestBody ConstraintRequest request) {
+    public ResponseEntity<ConstraintResponse> add(@Valid @RequestBody ConstraintRequest request,
+                                                  @AuthenticationPrincipal Jwt jwt) {
         ConstraintOutcome outcome = constraints.addVerifiedDistinct(request.accountA(), request.accountB(),
-                request.actor().strip());
+                Caller.client(jwt));
         boolean added = outcome == ConstraintOutcome.ADDED;
         ConstraintResponse body = new ConstraintResponse(request.accountA(), request.accountB(),
                 Constraints.VERIFIED_DISTINCT, added ? "added" : "already_present");

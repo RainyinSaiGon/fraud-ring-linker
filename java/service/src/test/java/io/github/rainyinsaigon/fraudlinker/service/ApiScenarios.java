@@ -61,8 +61,8 @@ abstract class ApiScenarios {
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
-        TestTokens.sendByDefault();
         run = UUID.randomUUID().toString().substring(0, 8);
+        TestTokens.sendByDefault(run);
     }
 
     String id(String name) {
@@ -97,14 +97,14 @@ abstract class ApiScenarios {
 
     ValidatableResponse decide(String clusterId, String outcome) {
         return given().contentType(ContentType.JSON)
-                .body("{\"outcome\":\"" + outcome + "\",\"analyst\":\"analyst-" + run + "\",\"note\":\"checked\"}")
+                .body("{\"outcome\":\"" + outcome + "\",\"note\":\"checked\"}")
                 .post("/api/v1/clusters/{id}/decisions", clusterId)
                 .then();
     }
 
     ValidatableResponse addConstraint(String a, String b) {
         return given().contentType(ContentType.JSON)
-                .body("{\"account_a\":\"" + a + "\",\"account_b\":\"" + b + "\",\"actor\":\"kyc-service\"}")
+                .body("{\"account_a\":\"" + a + "\",\"account_b\":\"" + b + "\"}")
                 .post("/api/v1/constraints")
                 .then();
     }
@@ -226,7 +226,7 @@ abstract class ApiScenarios {
         given().get("/api/v1/clusters/c999999999").then().statusCode(404);
         decide("c999999999", "CONFIRMED_FRAUD").statusCode(404);
         given().get("/api/v1/clusters/not-a-cluster").then().statusCode(400);
-        given().contentType(ContentType.JSON).body("{\"outcome\":\"MAYBE\",\"analyst\":\"x\"}")
+        given().contentType(ContentType.JSON).body("{\"outcome\":\"MAYBE\"}")
                 .post("/api/v1/clusters/c1/decisions").then().statusCode(400);
     }
 
@@ -309,7 +309,7 @@ abstract class ApiScenarios {
 
     ValidatableResponse decideProposal(String proposalId, String decision) {
         return given().contentType(ContentType.JSON)
-                .body("{\"analyst\":\"analyst-" + run + "\",\"note\":\"same ring\"}")
+                .body("{\"note\":\"same ring\"}")
                 .post("/api/v1/merge-proposals/{id}/" + decision, proposalId)
                 .then();
     }
@@ -436,7 +436,7 @@ abstract class ApiScenarios {
         decideProposal("not-a-uuid", "accept").statusCode(400);
         given().queryParam("status", "MAYBE").get("/api/v1/merge-proposals").then().statusCode(400);
         given().queryParam("limit", 0).get("/api/v1/merge-proposals").then().statusCode(400);
-        given().contentType(ContentType.JSON).body("{\"analyst\":\" \"}")
+        given().contentType(ContentType.JSON).body("{\"note\":\"" + "x".repeat(2001) + "\"}")
                 .post("/api/v1/merge-proposals/{id}/reject", UUID.randomUUID()).then().statusCode(400);
     }
 }

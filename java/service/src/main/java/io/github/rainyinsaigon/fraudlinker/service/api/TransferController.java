@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.mules.Transfer;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.MuleReasonResponse;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.MuleResponse;
@@ -13,6 +14,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,9 +43,10 @@ public class TransferController {
     /** Stores a batch of transfers, all or nothing, and rescores the accounts involved. */
     @PostMapping("/api/v1/transfers")
     @ResponseStatus(HttpStatus.CREATED)
-    public TransferBatchResponse record(@Valid @RequestBody TransferBatchRequest request) {
+    public TransferBatchResponse record(@Valid @RequestBody TransferBatchRequest request,
+                                        @AuthenticationPrincipal Jwt jwt) {
         List<Transfer> batch = request.transfers().stream().map(ApiModels.TransferRequest::toTransfer).toList();
-        TransferService.RecordResult result = transfers.record(batch);
+        TransferService.RecordResult result = transfers.record(batch, Caller.client(jwt));
         return new TransferBatchResponse(result.accepted(), result.flaggedNow(),
                 result.scores().stream().map(MuleScoreResponse::of).toList());
     }

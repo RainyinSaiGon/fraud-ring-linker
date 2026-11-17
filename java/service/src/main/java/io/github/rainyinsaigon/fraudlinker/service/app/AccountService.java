@@ -64,9 +64,10 @@ public class AccountService {
      * that name it arrived before it did, it may be flagged as a likely mule straight away,
      * and logins that arrived before it may flag it as a possible takeover.
      *
+     * @param client the system that sent the account; recorded as the actor of every event it causes
      * @throws ConflictException if the account ID already exists
      */
-    public LinkResult register(Account account) {
+    public LinkResult register(Account account, String client) {
         return writeThrough.execute(session -> {
             LinkState state = session.state();
             if (state.store().indexOf(account.accountId()) >= 0) {
@@ -77,8 +78,8 @@ public class AccountService {
             StreamResult result = session.streamLinker().assignWithCandidates(account);
             Assignment assignment = result.assignment();
             List<String> members = state.memberIds(assignment.clusterId());
-            muleFlagger.recordNew(session, now);
-            takeoverFlagger.recordNew(session, now);
+            muleFlagger.recordNew(session, now, client);
+            takeoverFlagger.recordNew(session, now, client);
             RiskAssessment risk = this.risk.assessAccount(session, account.accountId(), members);
 
             Map<String, Object> details = new LinkedHashMap<>();
@@ -87,8 +88,9 @@ public class AccountService {
             details.put("risk_action", risk.action().name());
             details.put("reason", risk.reason());
             audit.record(now, AuditRepository.ACCOUNT_LINKED, account.accountId(), assignment.clusterId(),
-                    AuditRepository.SYSTEM, details);
-            List<MergeProposal> proposals = mergeProposals.propose(state, assignment, result.mergeCandidates(), now);
+                    client, details);
+            List<MergeProposal> proposals = mergeProposals.propose(state, assignment, result.mergeCandidates(), now,
+                    client);
             return new LinkResult(assignment, members.size(), risk, proposals);
         });
     }

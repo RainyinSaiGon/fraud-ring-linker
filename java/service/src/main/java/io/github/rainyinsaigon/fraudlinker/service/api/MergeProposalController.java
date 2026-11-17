@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.MergeAcceptResponse;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.MergeDecisionRequest;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.MergeProposalResponse;
@@ -9,6 +10,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,15 +52,16 @@ public class MergeProposalController {
     }
 
     @PostMapping("/{proposalId}/accept")
-    public MergeAcceptResponse accept(@PathVariable UUID proposalId, @Valid @RequestBody MergeDecisionRequest request) {
-        MergeProposalService.AcceptResult result = proposals.accept(proposalId, request.analyst().strip(),
-                request.note());
+    public MergeAcceptResponse accept(@PathVariable UUID proposalId, @Valid @RequestBody MergeDecisionRequest request,
+                                      @AuthenticationPrincipal Jwt jwt) {
+        MergeProposalService.AcceptResult result = proposals.accept(proposalId, Caller.person(jwt), request.note());
         return new MergeAcceptResponse(MergeProposalResponse.of(result.proposal()), result.merged(),
                 result.clusterId(), result.clusterSize(), result.risk().action(), result.risk().reason());
     }
 
     @PostMapping("/{proposalId}/reject")
-    public MergeProposalResponse reject(@PathVariable UUID proposalId, @Valid @RequestBody MergeDecisionRequest request) {
-        return MergeProposalResponse.of(proposals.reject(proposalId, request.analyst().strip(), request.note()));
+    public MergeProposalResponse reject(@PathVariable UUID proposalId, @Valid @RequestBody MergeDecisionRequest request,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        return MergeProposalResponse.of(proposals.reject(proposalId, Caller.person(jwt), request.note()));
     }
 }

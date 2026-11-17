@@ -64,7 +64,7 @@ public class TransferService {
      *
      * @throws ConflictException if a transfer ID repeats within the batch or is already stored
      */
-    public RecordResult record(List<Transfer> batch) {
+    public RecordResult record(List<Transfer> batch, String client) {
         Set<String> ids = new HashSet<>();
         for (Transfer transfer : batch) {
             if (!ids.add(transfer.transferId())) {
@@ -84,7 +84,7 @@ public class TransferService {
                 touched.add(transfer.fromAccount());
                 touched.add(transfer.toAccount());
             }
-            List<String> flaggedNow = flagger.recordNew(session, now);
+            List<String> flaggedNow = flagger.recordNew(session, now, client);
             Map<String, MuleScore> scores = session.muleScores();
             List<MuleScore> touchedScores = touched.stream().map(scores::get).filter(s -> s != null).toList();
             return new RecordResult(batch.size(), flaggedNow, touchedScores);

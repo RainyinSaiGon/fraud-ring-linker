@@ -46,9 +46,9 @@ needs no CORS setup. Set `API_TARGET` to point it elsewhere.
 | `#/proposals/<id>` | **Merge proposal:** the accounts on each side, the new account and rule that link them, and Merge clusters / Keep apart |
 
 Design choices:
-- **Decisions need a name.** Both buttons stay disabled until the analyst types a
-  name, because the audit log must say who decided. Once login exists (roadmap
-  Stage 8), the name will come from the signed-in user instead.
+- **Decisions record the signed-in analyst.** There's no name to type: each form
+  says "Deciding as …", and the service takes the name from the token, so the
+  audit log can't be told someone else decided.
 - **Mule flags ask, never act.** A likely mule shows its signals ("6 unrelated payers in
   25 min, 90% sent on within 30 min") so the analyst can judge them, and only a
   decision restricts it. Possible mules get their own list because most are single
@@ -62,8 +62,8 @@ Design choices:
   and "Impossible jump: 13,361 km in 1 h", in words as well as a highlighted row.
 - **Split rings wait for a person.** Streaming never merges two clusters by itself.
   When a new account links strongly to two, the page lists the pair, and an
-  analyst merges them or keeps them apart. Merging needs a name like any decision,
-  and a refusal (for example, a verified-distinct pair on the two sides) is shown
+  analyst merges them or keeps them apart. Merging is recorded as the signed-in analyst
+  like any decision, and a refusal (for example, a verified-distinct pair on the two sides) is shown
   with the service's reason.
 - **Actions are shown in colour and words,** so the page never relies on colour alone.
 - **Errors use the service's own message,** for example "Cluster c9 not found."

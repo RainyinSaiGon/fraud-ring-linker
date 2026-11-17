@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.clustering.ClusterExplainer;
 import io.github.rainyinsaigon.fraudlinker.service.LinkerProperties;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.ClusterResponse;
@@ -13,6 +14,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -85,8 +88,9 @@ public class ClusterController {
     @PostMapping("/{clusterId}/decisions")
     @ResponseStatus(HttpStatus.CREATED)
     public DecisionResultResponse decide(@PathVariable @Pattern(regexp = CLUSTER_ID_PATTERN) String clusterId,
-                                         @Valid @RequestBody DecisionRequest request) {
-        ClusterService.DecisionResult result = clusters.decide(clusterId, request.outcome(), request.analyst().strip(),
+                                         @Valid @RequestBody DecisionRequest request,
+                                         @AuthenticationPrincipal Jwt jwt) {
+        ClusterService.DecisionResult result = clusters.decide(clusterId, request.outcome(), Caller.person(jwt),
                 request.note());
         return new DecisionResultResponse(DecisionResponse.of(result.decision()), result.risk().action(),
                 result.risk().reason());

@@ -96,7 +96,8 @@ public class SecurityConfig {
 
     /**
      * Checks the signature, the issuer, the audience and the expiry (with a minute of
-     * clock skew). A token without an expiry is refused.
+     * clock skew). A token without an expiry, or without a subject of at most
+     * {@value Caller#MAX_NAME} characters, is refused.
      */
     @Bean
     JwtDecoder jwtDecoder(SecurityProperties properties) {
@@ -110,10 +111,11 @@ public class SecurityConfig {
                 ? NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri().toString()).build()
                 : NimbusJwtDecoder.withPublicKey(readKey(properties)).build();
         OAuth2TokenValidator<Jwt> expiry = new JwtClaimValidator<Instant>(JwtClaimNames.EXP, Objects::nonNull);
+        OAuth2TokenValidator<Jwt> subject = new JwtClaimValidator<String>(JwtClaimNames.SUB, Caller::usable);
         OAuth2TokenValidator<Jwt> audience = new JwtClaimValidator<List<String>>(JwtClaimNames.AUD,
                 aud -> aud != null && aud.contains(properties.audience()));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(properties.issuer()), expiry, audience));
+                JwtValidators.createDefaultWithIssuer(properties.issuer()), expiry, subject, audience));
         return decoder;
     }
 

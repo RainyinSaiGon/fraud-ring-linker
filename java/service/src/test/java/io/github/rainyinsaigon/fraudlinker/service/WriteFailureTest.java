@@ -46,8 +46,8 @@ class WriteFailureTest {
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
-        TestTokens.sendByDefault();
         run = UUID.randomUUID().toString().substring(0, 8);
+        TestTokens.sendByDefault(run);
     }
 
     private io.restassured.response.ValidatableResponse register(String accountId, String card) {

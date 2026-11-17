@@ -137,7 +137,7 @@ describe("account page", () => {
     expect(screen.getByText("Allow")).toBeInTheDocument();
   });
 
-  it("explains that confirming steps up this account only, and needs a name", async () => {
+  it("explains that confirming steps up this account only, and decides as the signed-in analyst", async () => {
     const { calls } = mockFetch(routesFor());
     window.location.hash = "#/accounts/acc_1";
     render(<App />);
@@ -146,14 +146,14 @@ describe("account page", () => {
     expect(screen.getByText(/steps up this account only/)).toHaveTextContent(
       "The 1 other account(s) in its cluster are not affected.",
     );
-    expect(confirm).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Not a takeover" })).toBeDisabled();
-    await userEvent.type(screen.getByLabelText("Your name"), "   ");
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Not a takeover" })).toBeEnabled();
+    expect(screen.queryByLabelText("Your name")).not.toBeInTheDocument();
+    expect(screen.getByText("Deciding as").closest("p")).toHaveTextContent("Deciding as ana");
     expect(calls.some((call) => call.method === "POST")).toBe(false);
   });
 
-  it("sends the decision with the analyst's name and note, then reloads the account", async () => {
+  it("sends the decision and note without a name, then reloads the account", async () => {
     let decided = false;
     const { calls } = mockFetch({
       ...routesFor(),
@@ -169,8 +169,7 @@ describe("account page", () => {
     window.location.hash = "#/accounts/acc_1";
     render(<App />);
 
-    await userEvent.type(await screen.findByLabelText("Your name"), " Ana ");
-    await userEvent.type(screen.getByLabelText("Note (optional)"), "Customer did not log in from London");
+    await userEvent.type(await screen.findByLabelText("Note (optional)"), "Customer did not log in from London");
     await userEvent.click(screen.getByRole("button", { name: "Confirm takeover" }));
 
     await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(1));
@@ -178,7 +177,6 @@ describe("account page", () => {
     expect(post.url).toBe("/api/v1/accounts/acc_1/takeover-decisions");
     expect(post.body).toEqual({
       outcome: "CONFIRMED_TAKEOVER",
-      analyst: "Ana",
       note: "Customer did not log in from London",
     });
     expect(await screen.findByText("Step up")).toBeInTheDocument();
@@ -190,12 +188,10 @@ describe("account page", () => {
     window.location.hash = "#/accounts/acc_1";
     render(<App />);
 
-    await userEvent.type(await screen.findByLabelText("Your name"), "Ana");
-    await userEvent.click(screen.getByRole("button", { name: "Not a takeover" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Not a takeover" }));
 
     await waitFor(() => expect(calls.find((call) => call.method === "POST")?.body).toEqual({
       outcome: "NOT_TAKEOVER",
-      analyst: "Ana",
       note: null,
     }));
   });
@@ -209,8 +205,7 @@ describe("account page", () => {
     window.location.hash = "#/accounts/acc_1";
     render(<App />);
 
-    await userEvent.type(await screen.findByLabelText("Your name"), "Ana");
-    await userEvent.click(screen.getByRole("button", { name: "Confirm takeover" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm takeover" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Linking is temporarily unavailable.");
     expect(screen.getByRole("button", { name: "Confirm takeover" })).toBeEnabled();
