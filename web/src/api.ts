@@ -1,6 +1,8 @@
 // Typed client for the fraud-ring-linker REST API. Field names match the
 // service's snake_case JSON exactly.
 
+import { currentSession, signOut } from "./auth";
+
 export type RiskAction = "ALLOW" | "REVIEW" | "STEP_UP" | "RESTRICT";
 export type Outcome = "CONFIRMED_FRAUD" | "NOT_FRAUD";
 export type TakeoverOutcome = "CONFIRMED_TAKEOVER" | "NOT_TAKEOVER";
@@ -216,14 +218,27 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const session = currentSession();
   let response: Response;
   try {
     response = await fetch(path, {
       ...init,
-      headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}) },
+      headers: {
+        Accept: "application/json",
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+      },
     });
   } catch {
     throw new ApiError(0, "Can't reach the linking service. Check that it is running.");
+  }
+  if (response.status === 401) {
+    // The service refused the token (expired, revoked or from another issuer): sign in again.
+    signOut("Your session has ended. Sign in again.");
+    throw new ApiError(401, "Your session has ended. Sign in again.");
+  }
+  if (response.status === 403) {
+    throw new ApiError(403, "Your role can't do this.");
   }
   if (!response.ok) {
     throw new ApiError(response.status, await problemMessage(response));

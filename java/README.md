@@ -33,20 +33,57 @@ skipped, and everything else still runs. CI always runs them.
 Without Docker or PostgreSQL (in-memory database; data is lost on stop):
 
 ```bash
-./gradlew :service:bootRun --args='--spring.profiles.active=h2'
-# or build the jar and run it:
 ./gradlew :service:bootJar
-java -jar service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2
+# A key pair for local tokens, in a folder outside the repository. `keys` prints the service flags.
+java -jar service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2 \
+  $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys)
 ```
 
 With PostgreSQL (start one with `docker compose up -d` from this folder, or use your own):
 
 ```bash
 DATABASE_URL=jdbc:postgresql://localhost:5432/fraudlinker DATABASE_USERNAME=fraudlinker DATABASE_PASSWORD=fraudlinker \
-  java -jar service/build/libs/fraud-ring-linker-service.jar
+  java -jar service/build/libs/fraud-ring-linker-service.jar \
+  --linker.security.issuer=https://idp.example.com/ --linker.security.audience=fraud-ring-linker \
+  --linker.security.jwk-set-uri=https://idp.example.com/.well-known/jwks.json
 ```
 
 Health: `GET /actuator/health` (includes `linkingEngine`, DOWN until the state is loaded).
+
+### Tokens and roles
+
+Every API call needs `Authorization: Bearer <JWT>`. The service checks tokens but
+never issues them; the bank's identity provider does. It checks the signature,
+the issuer, the audience and the expiry (a minute of clock skew is allowed), and
+a token with no expiry is refused. It won't start without:
+
+| Setting | |
+|---|---|
+| `linker.security.issuer` | The `iss` every token must carry |
+| `linker.security.audience` | A value the token's `aud` must contain |
+| `linker.security.jwk-set-uri` or `linker.security.public-key` | The provider's signing keys (JWKS), or a PEM file with one RSA public key for local runs. Exactly one. |
+
+Roles come from the token's `roles` claim (a list of strings, any case; unknown
+values are ignored):
+
+| Role | Can |
+|---|---|
+| `ingest` | `POST` accounts, constraints, transfers and logins. Nothing else, not even reads. |
+| `analyst` | Every `GET`, plus decisions on clusters, merge proposals and takeovers |
+| `auditor` | Every `GET`; no decisions |
+
+A missing or bad token gets a 401 with `WWW-Authenticate: Bearer`; the wrong role
+gets a 403. Both are problem responses that don't say which check failed.
+`/actuator/health` and `/actuator/info` stay open. Anything not listed is refused,
+so a new endpoint is closed until someone adds it to `SecurityConfig` (a test
+fails if they don't).
+
+For local runs, [`tools/dev-auth`](../tools/dev-auth/) plays the identity
+provider: it makes a key pair in a folder you choose and signs short-lived tokens.
+
+```bash
+TOKEN=$(node ../tools/dev-auth/dev-auth.mjs token --keys /tmp/linker-keys --sub alice --roles ingest,analyst)
+```
 
 ### API
 
@@ -80,7 +117,8 @@ validation).
 Example:
 
 ```bash
-curl -s -XPOST localhost:8080/api/v1/accounts -H 'Content-Type: application/json' -d '{
+curl -s -XPOST localhost:8080/api/v1/accounts -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{
   "account_id":"acc_1","email":"alice@example.com","device_id":null,
   "ip":"203.0.113.7","payment_fingerprint":"pf_x","created_at":"2026-03-14T09:22:11Z"}'
 # {"account_id":"acc_1","cluster_id":"c1","confidence":1.0,"cluster_size":1,"risk_action":"ALLOW",...}
@@ -177,8 +215,8 @@ a re-verified customer is recorded, and ends it.
 
 ### Not built yet
 
-- Authentication. `analyst` and `actor` come from the request body; they must
-  come from the caller's identity, for example an OAuth2 resource server.
+- The analyst's name from the token. Tokens and roles are checked, but `analyst`
+  and `actor` still come from the request body (#68).
 - PII handling. Responses include raw emails and IPs; mask them per role.
 - Pagination beyond `limit`.
 - Horizontal scaling. State is per instance, so run a single writer.

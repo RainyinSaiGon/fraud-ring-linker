@@ -46,8 +46,10 @@ cd java
 # Command line
 java -jar engine/build/libs/fraud-ring-linker.jar link \
   --accounts accounts.jsonl --constraints constraints.jsonl --output clusters.json
-# REST service, no database setup needed
-./gradlew :service:bootRun --args='--spring.profiles.active=h2'
+# REST service, no database setup needed; local tokens come from tools/dev-auth
+./gradlew :service:bootJar
+java -jar service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2 \
+  $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys)
 ```
 
 See [java/README.md](java/README.md) for the API, risk actions and design

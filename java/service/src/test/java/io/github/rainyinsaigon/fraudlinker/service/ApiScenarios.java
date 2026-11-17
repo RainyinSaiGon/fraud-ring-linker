@@ -7,6 +7,8 @@ import io.restassured.response.ValidatableResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -38,6 +40,12 @@ import static org.hamcrest.Matchers.startsWith;
  */
 abstract class ApiScenarios {
 
+    @DynamicPropertySource
+    static void tokens(DynamicPropertyRegistry registry) {
+        TestTokens.configure(registry);
+    }
+
+
     @LocalServerPort
     int port;
 
@@ -53,6 +61,7 @@ abstract class ApiScenarios {
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+        TestTokens.sendByDefault();
         run = UUID.randomUUID().toString().substring(0, 8);
     }
 

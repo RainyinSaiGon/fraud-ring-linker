@@ -6,15 +6,20 @@ Node 20 or newer.
 
 ## Run it
 
-Start the service first, for example without Docker:
+Start the service first, for example without Docker, with tokens from
+[`tools/dev-auth`](../dev-auth/):
 
 ```bash
-cd java && ./gradlew :service:bootRun --args='--spring.profiles.active=h2'
+cd java && ./gradlew :service:bootJar && java -jar service/build/libs/fraud-ring-linker-service.jar \
+  --spring.profiles.active=h2 $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys)
 ```
 
-Then, from this folder:
+Then, from this folder, with a token that has the `ingest` role (to send traffic)
+and `analyst` (to read the clusters back). Pass it as `--token` or in
+`LINKER_TOKEN`:
 
 ```bash
+export LINKER_TOKEN=$(node ../dev-auth/dev-auth.mjs token --keys /tmp/linker-keys --sub simulator --roles ingest,analyst)
 npm run simulate                                  # defaults: seed 1, 200 customers, 8 rings
 npm run simulate -- --seed 3 --rings 12 --base-url http://localhost:8080
 npm run extra-ring-member -- --ring 0             # one more sign-up using ring 0's card and phone

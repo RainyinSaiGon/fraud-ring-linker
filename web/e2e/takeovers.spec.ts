@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { type APIRequestContext } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { buildLogins } from "../../tools/simulator/src/logins.mjs";
 import { buildScenario, type SimAccount } from "../../tools/simulator/src/scenario.mjs";
 

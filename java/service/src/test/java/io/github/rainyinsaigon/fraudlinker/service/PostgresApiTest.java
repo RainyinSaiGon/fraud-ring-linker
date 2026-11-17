@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers(disabledWithoutDocker = true)
-class PostgresApiTest extends LoginApiScenarios {
+class PostgresApiTest extends SecurityApiScenarios {
 
     @Container
     @ServiceConnection

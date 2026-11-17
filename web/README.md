@@ -7,14 +7,31 @@ Vite. It talks only to the service's REST API.
 ## Run it
 
 ```bash
-# 1. The service (no Docker needed with the h2 profile)
-(cd ../java && ./gradlew :service:bootRun --args='--spring.profiles.active=h2')
+# 1. The service (no Docker needed with the h2 profile), checking tokens signed by a local key
+(cd ../java && ./gradlew :service:bootJar && java -jar service/build/libs/fraud-ring-linker-service.jar \
+  --spring.profiles.active=h2 $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys))
 # 2. Some traffic to review
-(cd ../tools/simulator && npm run simulate)
-# 3. The page, at http://localhost:5173
+(cd ../tools/simulator && LINKER_TOKEN=$(node ../dev-auth/dev-auth.mjs token --keys /tmp/linker-keys \
+  --sub simulator --roles ingest,analyst) npm run simulate)
+# 3. A token to sign in with, then the page at http://localhost:5173
+node ../tools/dev-auth/dev-auth.mjs token --keys /tmp/linker-keys --sub alice --roles analyst
 npm install
 npm run dev
 ```
+
+## Signing in
+
+The page asks for a token first and sends it with every call. For now you paste
+one: from your identity provider, or from `tools/dev-auth` for a local service.
+It's kept in `sessionStorage`, so it lasts for this tab only. The top bar shows
+who is signed in and their roles, with a "Sign out" button.
+
+- When the token expires, or the service refuses it (401), the page goes back to
+  sign-in and says the session has ended.
+- When the role can't do something (403), the page stays signed in and says
+  "Your role can't do this." The service is what enforces roles.
+- Real sign-in through the identity provider (OpenID Connect) replaces the paste
+  screen in #70.
 
 In development, Vite forwards `/api` to `http://localhost:8080`, so the service
 needs no CORS setup. Set `API_TARGET` to point it elsewhere.
@@ -63,6 +80,9 @@ npm run e2e         # Playwright: starts the real service and the page, then cli
 
 The end-to-end test needs the service jar (`./gradlew :service:bootJar` in
 `java/`) and a Chromium download the first time
-(`npx playwright install chromium`).
+(`npx playwright install chromium`). It makes a key pair in the system temporary
+folder (`fraud-ring-linker-e2e-keys`), starts the service with its public half,
+and signs its own tokens: the browser signs in as an analyst or an auditor, and
+the test's API calls use the `ingest` role (`e2e/fixtures.ts`).
 
 Manual release checks are in [`docs/MANUAL_TEST_CHECKLIST.md`](../docs/MANUAL_TEST_CHECKLIST.md).

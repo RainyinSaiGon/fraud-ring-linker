@@ -7,7 +7,7 @@ import { formatSummary, summarize } from "../src/report.mjs";
 function fakeFetch(handler) {
   const calls = [];
   const fetchImpl = async (url, init) => {
-    calls.push({ url, method: init.method, body: init.body ? JSON.parse(init.body) : undefined });
+    calls.push({ url, method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
     const { status = 200, body } = await handler(url, init);
     return { ok: status < 400, status, text: async () => (body === undefined ? "" : JSON.stringify(body)) };
   };
@@ -25,6 +25,15 @@ describe("createClient", () => {
     assert.equal(calls[0].url, "http://svc:8080/api/v1/accounts");
     assert.equal(calls[0].method, "POST");
     assert.deepEqual(calls[0].body, { account_id: "a" });
+  });
+
+  it("sends the bearer token when given one, and no Authorization header otherwise", async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ status: 200, body: {} }));
+    await createClient("http://svc", fetchImpl, "t0k3n").reviewQueue();
+    await createClient("http://svc", fetchImpl).reviewQueue();
+
+    assert.equal(calls[0].headers.Authorization, "Bearer t0k3n");
+    assert.equal("Authorization" in calls[1].headers, false);
   });
 
   it("turns problem responses into ApiError with the detail message", async () => {

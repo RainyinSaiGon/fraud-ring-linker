@@ -1,0 +1,13 @@
+{
+  "name": "fraud-ring-linker-dev-auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local signing keys and tokens for running and testing the fraud-ring-linker service. Development only.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\""
+  }
+}

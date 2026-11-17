@@ -16,12 +16,30 @@ import type {
   Transfer,
 } from "../api";
 
+const b64url = (value: unknown) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+/** An unsigned token with these claims; the page only reads claims, and fetch is mocked. */
+export function testToken(claims: Record<string, unknown> = {}): string {
+  const payload = { sub: "ana", roles: ["analyst"], exp: Math.floor(Date.now() / 1000) + 3600, ...claims };
+  return `${b64url({ alg: "RS256" })}.${b64url(payload)}.c2ln`;
+}
+
 /** Replaces global fetch with a router of canned responses, and records every call. */
 export function mockFetch(routes: Record<string, (init?: RequestInit) => { status?: number; body?: unknown }>) {
-  const calls: { url: string; method: string; body?: unknown }[] = [];
+  const calls: { url: string; method: string; body?: unknown; authorization?: string }[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    calls.push({
+      url,
+      method: init?.method ?? "GET",
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      authorization: headers.Authorization,
+    });
     const key = Object.keys(routes).find((pattern) => url.startsWith(pattern) && (routes[pattern] !== undefined));
     const route = key === undefined ? undefined : routes[key];
     if (!route) return new Response(JSON.stringify({ title: "Not found", detail: "Not found." }), { status: 404 });

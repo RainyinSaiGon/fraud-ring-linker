@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -29,8 +30,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** HTTP contract of the accounts endpoints: JSON shape, validation and error mapping. The service is mocked. */
+/**
+ * HTTP contract of the accounts endpoints: JSON shape, validation and error mapping. The service is mocked.
+ * Security filters are off here; {@code SecurityApiScenarios} checks tokens and roles against the real service.
+ */
 @WebMvcTest(AccountController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class AccountControllerWebTest {
     private static final String VALID = """
             {"account_id":"acc_1","email":"alice@example.com","device_id":null,"ip":"203.0.113.7",

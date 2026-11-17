@@ -14,6 +14,7 @@ dependencies {
     implementation(libs.spring.boot.starter.jdbc)
     implementation(libs.spring.boot.starter.flyway)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.security.oauth2.resource.server)
     implementation(libs.flyway.database.postgresql)
     runtimeOnly(libs.postgresql)
     // In-memory database for the `h2` profile: run and test the service without Docker or PostgreSQL.
@@ -21,6 +22,7 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
+    testImplementation(libs.spring.boot.starter.security.test)
     testImplementation(libs.spring.boot.testcontainers)
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.testcontainers.postgresql)

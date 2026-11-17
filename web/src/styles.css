@@ -453,3 +453,21 @@ textarea {
   white-space: nowrap;
   overflow-wrap: normal;
 }
+
+.session {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.sign-in {
+  max-width: 36rem;
+}
+
+.sign-in textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}

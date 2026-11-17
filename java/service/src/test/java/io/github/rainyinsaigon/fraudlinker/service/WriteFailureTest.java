@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.util.UUID;
@@ -27,6 +29,12 @@ import static org.mockito.Mockito.doThrow;
 @ActiveProfiles("h2")
 class WriteFailureTest {
 
+    @DynamicPropertySource
+    static void tokens(DynamicPropertyRegistry registry) {
+        TestTokens.configure(registry);
+    }
+
+
     @LocalServerPort
     int port;
 
@@ -38,6 +46,7 @@ class WriteFailureTest {
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+        TestTokens.sendByDefault();
         run = UUID.randomUUID().toString().substring(0, 8);
     }
 

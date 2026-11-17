@@ -1,8 +1,9 @@
 # Manual test checklist
 
 Run before a release, against the service started with
-`--spring.profiles.active=h2` and filled by the simulator
-(`npm run simulate` in `tools/simulator`). Record the date, the commit, and
+`--spring.profiles.active=h2` and a `tools/dev-auth` key, and filled by the
+simulator (`npm run simulate` in `tools/simulator`). Sign in with a
+`tools/dev-auth` token for the `analyst` role. Record the date, the commit, and
 pass or fail for each line.
 
 The automated tests cover one main flow end to end (Playwright) and each
