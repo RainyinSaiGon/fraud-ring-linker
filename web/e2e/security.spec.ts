@@ -23,7 +23,7 @@ async function seedPair(request: APIRequestContext, run: string): Promise<string
   return clusterId;
 }
 
-test("the page asks for a token first, and signs in with one", async ({ browser }) => {
+test("a development build also takes a pasted token", async ({ browser }) => {
   // A fresh context, without the fixture's analyst sign-in.
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -31,7 +31,7 @@ test("the page asks for a token first, and signs in with one", async ({ browser 
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 
   await page.getByLabel("Token").fill(token("pasted-analyst", ["analyst"]));
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
   await expect(page.getByText("Signed in as")).toContainText("pasted-analyst");
@@ -40,17 +40,29 @@ test("the page asks for a token first, and signs in with one", async ({ browser 
   await context.close();
 });
 
-test("an auditor can read a cluster but the service refuses their decision", async ({ page, request }) => {
+test("an auditor can read a cluster, sees no decision form, and the service refuses their decision", async ({
+  page,
+  request,
+  playwright,
+}) => {
   const run = Date.now().toString(36);
   const clusterId = await seedPair(request, run);
   await signInAs(page, "e2e-auditor", ["auditor"]);
 
   await page.goto(`/#/clusters/${clusterId}`);
   await expect(page.getByRole("heading", { name: `Cluster ${clusterId}` })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm fraud" }).click();
+  await expect(page.getByText("Only analysts can decide. You can read everything here.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm fraud" })).toHaveCount(0);
 
-  await expect(page.getByRole("alert")).toHaveText("Your role can't do this.");
-  await expect(page.getByText("Needs review", { exact: true })).toBeVisible();
+  // Hiding the form is a courtesy; the service is what refuses.
+  const auditor = await playwright.request.newContext({
+    extraHTTPHeaders: { Authorization: `Bearer ${token("e2e-auditor", ["auditor"])}` },
+  });
+  const decision = await auditor.post(`${service}/api/v1/clusters/${clusterId}/decisions`, {
+    data: { outcome: "CONFIRMED_FRAUD" },
+  });
+  expect(decision.status()).toBe(403);
+  await auditor.dispose();
 });
 
 test("the service refuses calls with no token or the wrong role", async ({ playwright }) => {

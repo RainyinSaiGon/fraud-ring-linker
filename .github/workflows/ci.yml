@@ -120,6 +120,9 @@ jobs:
       - name: Type check and build
         working-directory: web
         run: npm run build
+      - name: Check the production build has no paste-a-token sign-in
+        working-directory: web
+        run: npm run check:build
       - name: Component tests
         working-directory: web
         run: npm test

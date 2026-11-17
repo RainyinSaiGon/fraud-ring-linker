@@ -1,10 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 import { serviceArgs } from "../tools/dev-auth/dev-auth.mjs";
-import { keys } from "./e2e/keys";
+import { clientId, issuer, issuerPort, keys, keysDir } from "./e2e/keys";
 
-// Starts the real Java service (in-memory H2 database) and the page, then drives
-// a browser through them. The service checks tokens signed with a key pair made
-// for the run (see e2e/keys.ts). Build the service jar first: `./gradlew :service:bootJar` in java/.
+// Starts a local test issuer, the real Java service (in-memory H2 database) and the
+// page, then drives a browser through them. The issuer and the tests sign tokens with
+// a key pair made for the run, and the service trusts it (see e2e/keys.ts). Build the service jar first: `./gradlew :service:bootJar` in java/.
 const servicePort = 18081;
 const webPort = 5174;
 
@@ -20,7 +20,13 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `java -jar ../java/service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2 --server.port=${servicePort} ${serviceArgs(keys.publicKey).join(" ")}`,
+      command: `node ../tools/dev-auth/dev-auth.mjs issuer --keys "${keysDir}" --port ${issuerPort}`,
+      url: `${issuer}/.well-known/openid-configuration`,
+      timeout: 30_000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: `java -jar ../java/service/build/libs/fraud-ring-linker-service.jar --spring.profiles.active=h2 --server.port=${servicePort} ${serviceArgs(keys.publicKey, issuer).join(" ")}`,
       url: `http://localhost:${servicePort}/actuator/health`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
@@ -28,7 +34,12 @@ export default defineConfig({
     {
       command: `npx vite --port ${webPort}`,
       url: `http://localhost:${webPort}`,
-      env: { API_TARGET: `http://localhost:${servicePort}`, PORT: String(webPort) },
+      env: {
+        API_TARGET: `http://localhost:${servicePort}`,
+        PORT: String(webPort),
+        VITE_OIDC_ISSUER: issuer,
+        VITE_OIDC_CLIENT_ID: clientId,
+      },
       timeout: 60_000,
       reuseExistingServer: !process.env.CI,
     },

@@ -1,13 +1,19 @@
 // The bearer token the page sends with every API call.
 //
-// For now an analyst pastes a token (from the identity provider or tools/dev-auth);
-// real sign-in through the identity provider replaces that screen later. The token
-// lives in sessionStorage, so it lasts for this browser tab only and is gone when the
-// tab closes. The page reads the token's claims only to show who is signed in and
-// when it expires; the service checks the signature.
+// It comes from one of two places:
+// - Sign-in through the identity provider (oidc.ts). The token is kept in memory
+//   only, so it's gone when the page is reloaded or closed; signing in again is
+//   quick while the identity provider's own session lasts.
+// - In development builds only, a pasted token (from tools/dev-auth), kept in
+//   sessionStorage for this tab. Production builds never read it.
+//
+// The page reads the token's claims only to show who is signed in, what their
+// roles allow on screen, and when it expires; the service checks the signature.
 
 const KEY = "linker.token";
+const PASTE_ALLOWED = import.meta.env.DEV;
 const listeners = new Set<() => void>();
+let memoryToken: string | null = null;
 let endedBecause: string | null = null;
 
 export interface Session {
@@ -41,6 +47,8 @@ export function readToken(token: string, now = Date.now()): Session | { error: s
 }
 
 function stored(): string | null {
+  if (memoryToken) return memoryToken;
+  if (!PASTE_ALLOWED) return null;
   try {
     return sessionStorage.getItem(KEY);
   } catch {
@@ -56,7 +64,9 @@ export function currentSession(now = Date.now()): Session | null {
   return "error" in session ? null : session;
 }
 
+/** A pasted token. Development builds only. */
 export function signIn(token: string): Session | { error: string } {
+  if (!PASTE_ALLOWED) return { error: "Pasted tokens work in development builds only." };
   const session = readToken(token);
   if ("error" in session) return session;
   endedBecause = null;
@@ -69,13 +79,32 @@ export function signIn(token: string): Session | { error: string } {
   return session;
 }
 
-/** Signs out; `reason` is shown on the sign-in screen, for example when the service refused the token. */
+/** A token from the identity provider, kept in memory only. `null` forgets it. */
+export function setProviderToken(token: string | null) {
+  memoryToken = token;
+  if (token) endedBecause = null;
+  listeners.forEach((listener) => listener());
+}
+
+/** Whether the current session is allowed to make decisions. The service enforces it; this only hides forms. */
+export function canDecide(): boolean {
+  return currentSession()?.roles.includes("analyst") ?? false;
+}
+
+/**
+ * Forgets the token on this page; `reason` is shown on the sign-in screen, for
+ * example when the service refused the token. `oidc.signOutEverywhere` also ends
+ * the identity provider's session.
+ */
 export function signOut(reason: string | null = null) {
   endedBecause = reason;
-  try {
-    sessionStorage.removeItem(KEY);
-  } catch {
-    // Nothing stored.
+  memoryToken = null;
+  if (PASTE_ALLOWED) {
+    try {
+      sessionStorage.removeItem(KEY);
+    } catch {
+      // Nothing stored.
+    }
   }
   listeners.forEach((listener) => listener());
 }

@@ -322,6 +322,22 @@ What this means:
 This closes the two biggest gaps listed under "Not built yet" in the service
 README.
 
+**Built (#66):**
+- Every API call needs a signed token, with the `ingest`, `analyst` or `auditor`
+  role. A test fails if an endpoint is missing from the role table (#67).
+- Who acted comes from the token: the analyst for decisions, the sending client
+  for everything an ingest call causes (#68).
+- Emails and IPs are masked in every response. An analyst can reveal one
+  account, and each reveal is audited. Every scenario test response is scanned
+  for raw values (#69).
+- The page signs in through an identity provider with OpenID Connect
+  (authorization code with PKCE) and keeps tokens in memory. `tools/dev-auth`
+  provides a local test provider (#70).
+
+**Not done:** token revocation before expiry (a stolen token works until it
+expires; keep lifetimes short), per-analyst rate limits on reveals, and a real
+identity provider in a deployed environment.
+
 ## Order
 
 3 and 4 first: they are the team's listed requirements (JavaScript, quality

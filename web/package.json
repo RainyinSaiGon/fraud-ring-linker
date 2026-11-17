@@ -10,9 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "check:build": "node scripts/check-build.mjs"
   },
   "dependencies": {
+    "oidc-client-ts": "3.5.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

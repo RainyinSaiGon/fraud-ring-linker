@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiError, type RevealResult } from "../api";
-import { currentSession } from "../auth";
+import { canDecide } from "../auth";
 
 interface Props {
   accountId: string;
@@ -16,7 +16,7 @@ interface Props {
  * stay on this page only until it's left or reloaded.
  */
 export function ContactDetails({ accountId, email, ip, onRevealed }: Props) {
-  const canReveal = currentSession()?.roles.includes("analyst") ?? false;
+  const canReveal = canDecide();
   const [reason, setReason] = useState("");
   const [revealed, setRevealed] = useState<RevealResult | null>(null);
   const [pending, setPending] = useState(false);

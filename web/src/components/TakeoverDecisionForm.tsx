@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiError, type TakeoverDecisionResult, type TakeoverOutcome } from "../api";
 import { DecidingAs } from "./DecidingAs";
+import { canDecide } from "../auth";
 
 interface Props {
   accountId: string;
@@ -12,7 +13,19 @@ interface Props {
  * Records whether someone else got into one account, as the signed-in analyst.
  * Unlike a fraud decision, it never covers the rest of the cluster.
  */
-export function TakeoverDecisionForm({ accountId, clusterSize, onDecided }: Props) {
+export function TakeoverDecisionForm(props: Props) {
+  if (!canDecide()) {
+    return (
+      <div className="card">
+        <h2>Decision</h2>
+        <p className="muted">Only analysts can decide. You can read everything here.</p>
+      </div>
+    );
+  }
+  return <TakeoverFields {...props} />;
+}
+
+function TakeoverFields({ accountId, clusterSize, onDecided }: Props) {
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<TakeoverOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
