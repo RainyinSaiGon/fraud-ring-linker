@@ -9,6 +9,7 @@ import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.domain.Constraint;
 import io.github.rainyinsaigon.fraudlinker.mules.Transfer;
 import io.github.rainyinsaigon.fraudlinker.normalize.Text;
+import io.github.rainyinsaigon.fraudlinker.takeover.Login;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -32,7 +33,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Reads accounts, constraints and transfers from JSONL (one JSON object per line).
+ * Reads accounts, constraints, transfers and logins from JSONL (one JSON object per line).
  *
  * <p>Blank lines are skipped. Unknown fields are ignored and field names match
  * case-insensitively. A record with a missing {@code account_id} or an invalid
@@ -87,6 +88,17 @@ public final class JsonlReader {
             throw new LinkerException("open transfers \"" + path + "\": " + e.getMessage(), e);
         }
         return transfers;
+    }
+
+    /** Logins in file order; an invalid one is an error naming the line. */
+    public static List<Login> readLogins(Path path) {
+        List<Login> logins = new ArrayList<>();
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            scan(reader, path.toString(), node -> logins.add(decodeLogin(node)));
+        } catch (IOException e) {
+            throw new LinkerException("open logins \"" + path + "\": " + e.getMessage(), e);
+        }
+        return logins;
     }
 
     /** Streams accounts one at a time; {@code handler} runs before the next line is read. */
@@ -184,6 +196,33 @@ public final class JsonlReader {
         }
         return new Transfer(Text.trimSpace(string(node, "transfer_id")), Text.trimSpace(string(node, "from_account")),
                 Text.trimSpace(string(node, "to_account")), amount.longValue(), occurredAt);
+    }
+
+    private static Login decodeLogin(JsonNode node) {
+        JsonNode success = field(node, "success");
+        if (success == null || !success.isBoolean()) {
+            throw new LinkerException("success must be true or false");
+        }
+        Instant occurredAt = timestamp(node, "occurred_at");
+        if (occurredAt == null) {
+            throw new LinkerException("missing or invalid occurred_at");
+        }
+        return new Login(Text.trimSpace(string(node, "login_id")), Text.trimSpace(string(node, "account_id")),
+                nullableString(node, "device_id"), nullableString(node, "ip"), success.booleanValue(), occurredAt,
+                nullableNumber(node, "latitude"), nullableNumber(node, "longitude"));
+    }
+
+    /** A number field; missing or null reads as null. Any other JSON type is an error. */
+    private static Double nullableNumber(JsonNode node, String name) {
+        JsonNode value = field(node, name);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isNumber()) {
+            throw new LinkerException("field " + name + " must be a number, got " + value.getNodeType()
+                    .toString().toLowerCase(Locale.ROOT));
+        }
+        return value.doubleValue();
     }
 
     /** Finds a field by exact name, falling back to a case-insensitive match. */

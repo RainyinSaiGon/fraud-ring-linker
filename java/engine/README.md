@@ -131,6 +131,30 @@ java -jar engine/build/libs/fraud-ring-linker.jar mules --datasets out/seed-1,ou
 - `tools/mule-sweep/sweep.sh [seedCount]` exports simulator seeds and runs it in
   one command. Results are in Stage 6 of `docs/ROADMAP.md`.
 
+## Takeovers mode
+
+Measures takeover detection against the simulator's planted takeovers, then
+sweeps its main thresholds. Each dataset directory also needs `logins.jsonl` and
+a version 3 `truth.json`, as `tools/simulator export` writes them:
+
+```bash
+java -jar engine/build/libs/fraud-ring-linker.jar takeovers --datasets out/seed-1,out/seed-2 \
+  [--min-history 3,5,8] [--max-speeds 500,900,1500] [--burst-failures 3,5,8] \
+  [--shared-device-accounts 3,4,6] [--flag-thresholds 0.5,0.6,0.7,0.8,0.9] \
+  [--costs 50:5000,50:1000,50:200] [--format text|json]
+```
+
+- It prints takeovers found and missed at today's setting (by kind), legitimate
+  accounts flagged by hard case and by the signals that fired, the review count,
+  and how soon each takeover was flagged: the attacker's successful logins up to
+  the flag (1 means the flag came with the first one).
+- The sweep changes one threshold at a time, with the others at today's value,
+  and tries each at every flag threshold. Then it names the cheapest setting at
+  each price pair (`falseFlag:missedTakeover`).
+- Only accounts in `accounts.jsonl` count as held, as in the service.
+- `tools/takeover-sweep/sweep.sh [seedCount]` exports simulator seeds and runs it
+  in one command. Results are in Stage 7 of `docs/ROADMAP.md`.
+
 ## Mule scoring
 
 `MuleScorer` (package `mules`, Java only) scores how mule-like each account's

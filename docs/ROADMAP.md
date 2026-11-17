@@ -244,6 +244,75 @@ Login events with device and IP: a first-time device, a location change no
 person could travel, a burst of failed logins. A takeover flag makes an
 account `REVIEW` even when it is in no cluster.
 
+**Built (#55):** the engine scores new devices, impossible travel, failed-login
+bursts and shared devices, and no single signal can flag an account (#56). The
+simulator plants credential stuffing, phishing and password guessing, plus hard
+legitimate cases (#57). The service takes in logins, flags accounts it holds for
+review, and a confirmed takeover makes the account `STEP_UP` (#58). The analyst
+page lists possible takeovers and names each signal on the login that showed it
+(#59).
+
+**Measured (#60):** `tools/takeover-sweep/sweep.sh 30` exports simulator seeds 1
+to 30 (about 7,900 logins over three weeks, 10 or 11 takeovers and about 19 hard
+legitimate accounts each) and scores every setting. Clusters come from batch
+linking.
+
+| At today's setting (history 5, 900 km/h, burst 5, shared device 4, flag at 0.80) | Result |
+|---|---|
+| Takeovers flagged | 325 of 325 (recall 100%): stuffing 145, phishing 90, password guessing 90 |
+| New phones flagged | 0 of 120 |
+| Holidays flagged | 0 of 90 |
+| Forgotten passwords flagged | 0 of 120 |
+| Family tablets flagged | 4 of 239, on new device plus shared device |
+| Any other held account flagged | 0 (precision 98.8%) |
+| Reviews | 329 over 30 seeds, about 11 per seed |
+| Time to flag | every takeover at the attacker's first successful login |
+
+Takeovers flagged / legitimate accounts flagged, summed over the 30 seeds, one
+threshold changed at a time:
+
+| Threshold changed | Flag at 0.50 to 0.70 | 0.80 (today) | 0.90 |
+|---|---|---|---|
+| None (today) | 325 / 185 | 325 / 4 | 197 / 0 |
+| History 3 or 8 | 325 / 185 | 325 / 10 or 2 | 197 / 0 |
+| Speed 500 or 1,500 km/h | 325 / 185 | 325 / 4 | 197 or 188 / 0 |
+| Burst 3 | 325 / 220 | 325 / 4 | 197 / 0 |
+| Burst 8 | 312 / 100 | 312 / 4 | 177 / 0 |
+| Shared device 3 | 325 / 309 | 325 / 29 | 197 / 0 |
+| Shared device 6 | 325 / 85 | 325 / 0 | 88 / 0 |
+
+What this means:
+
+- **The flag threshold is the lever, and the weights explain why.** Below 0.80,
+  one strong signal (0.7) is enough: 185 legitimate accounts are flagged, 100
+  family tablets on the shared device alone and 85 forgotten passwords on a
+  failed burst then success alone. At 0.90, only incidents with three signals
+  are flagged: every phishing victim (new device plus travel, 0.82) and the 38
+  password guessers with no known location are missed. Today's 0.80 needs two
+  signals, and every planted attack shows two.
+- **Raising the shared-device count to 5 removes the 4 false flags without
+  losing a takeover,** and the sweep calls 6 cheapest at every price tried ($50
+  per false flag against $5,000, $1,000 or $200 per missed takeover). **Keep 4
+  anyway, for now.** The simulator's stuffing device always logs in from abroad,
+  so impossible travel already flags every victim, and recall stays at 325 even
+  with the shared-device signal turned off. The sweep therefore cannot see what a
+  higher count costs: a campaign of 4 or 5 victims from a nearby proxy would only
+  be caught by the shared-device signal. The saving is 4 reviews in 30 seeds.
+- **History and speed barely matter.** History 3 flags 6 more family-tablet
+  accounts, whose tablet then counts as new; history 8 saves 2 of the 4. Every
+  speed tried gives the same result at 0.80.
+- **Burst 8 misses password guessing.** Guessers fail 6 to 12 times before they
+  get in, so a burst of 8 loses 13 of the 90; burst 3 only adds false flags below
+  0.80.
+- **Every takeover is flagged at the attacker's first session.** That is the best
+  possible, but it holds because each attack's two signals fire on its first
+  successful login.
+- **Still to test:** stuffing and phishing from a proxy in the customer's own
+  city, so there is no impossible travel; slow password guessing that spreads
+  failures over hours; and attackers who reuse the customer's device fingerprint.
+  As in Stages 5 and 6, the simulator was written with the detector's signals in
+  mind, so these numbers are an upper bound.
+
 ### Stage 8: login and data protection
 
 - The analyst's name comes from an OAuth2 token, not the request body.

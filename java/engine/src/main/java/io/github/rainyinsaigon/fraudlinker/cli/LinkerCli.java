@@ -79,6 +79,7 @@ public final class LinkerCli {
             case "cost" -> writeOut(stdout, CostCommand.run(parseFlags(rest, CostCommand.FLAGS)));
             case "sweep" -> writeOut(stdout, SweepCommand.run(parseFlags(rest, SweepCommand.FLAGS)));
             case "mules" -> writeOut(stdout, MulesCommand.run(parseFlags(rest, MulesCommand.FLAGS)));
+            case "takeovers" -> writeOut(stdout, TakeoversCommand.run(parseFlags(rest, TakeoversCommand.FLAGS)));
             case "help", "-h", "--help" -> printUsage(new PrintStream(stdout, true, StandardCharsets.UTF_8));
             default -> {
                 printUsage(stderr);
@@ -189,5 +190,8 @@ public final class LinkerCli {
         out.println("               [--costs 50:2000,50:500,50:50] [--format text|json]");
         out.println("  linker mules --datasets <dir>[,<dir>...] [--fan-in-payers 3,4,5,6,8] [--pass-through-shares 0.6,...]");
         out.println("               [--flag-thresholds 0.7,...] [--costs 50:2000,50:500,50:50] [--format text|json]");
+        out.println("  linker takeovers --datasets <dir>[,<dir>...] [--min-history 3,5,8] [--max-speeds 500,900,1500]");
+        out.println("                   [--burst-failures 3,5,8] [--shared-device-accounts 3,4,6] [--flag-thresholds 0.5,...]");
+        out.println("                   [--costs 50:5000,50:1000,50:200] [--format text|json]");
     }
 }
