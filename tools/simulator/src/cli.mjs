@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Usage:
-//   node src/cli.mjs run   [--base-url URL] [--seed N] [--customers N] [--households N]
+//   node src/cli.mjs run   [--base-url URL] [--token JWT] [--seed N] [--customers N] [--households N]
 //                          [--office-workers N] [--rings N] [--mule-chains N] [--truth FILE]
-//   node src/cli.mjs extra --truth FILE [--ring INDEX] [--base-url URL]
+//   node src/cli.mjs extra --truth FILE [--ring INDEX] [--base-url URL] [--token JWT]
 //   node src/cli.mjs export [--seed N] [--customers N] [--households N]
 //                           [--office-workers N] [--rings N] [--mule-chains N] [--out-dir DIR]
 //
@@ -11,6 +11,8 @@
 // `extra` sends one more sign-up reusing a planted ring's card and phone.
 // `export` writes a scenario to files (accounts, constraints, transfers, logins, ground truth) with no service.
 // `run` does not send logins yet: the service does not accept them.
+// `run` and `extra` need a token with the ingest and analyst roles, from --token or the
+// LINKER_TOKEN environment variable; tools/dev-auth mints one for a local service.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -26,6 +28,7 @@ const { values } = parseArgs({
   args: rest,
   options: {
     "base-url": { type: "string", default: "http://localhost:8080" },
+    token: { type: "string", default: process.env.LINKER_TOKEN },
     seed: { type: "string", default: String(DEFAULTS.seed) },
     customers: { type: "string", default: String(DEFAULTS.customers) },
     households: { type: "string", default: String(DEFAULTS.households) },
@@ -39,7 +42,7 @@ const { values } = parseArgs({
   },
 });
 
-const client = createClient(values["base-url"]);
+const client = createClient(values["base-url"], fetch, values.token);
 
 try {
   if (command === "run") {

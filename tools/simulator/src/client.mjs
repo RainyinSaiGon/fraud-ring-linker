@@ -12,14 +12,19 @@ export class ApiError extends Error {
 /**
  * @param {string} baseUrl   e.g. http://localhost:8080
  * @param {typeof fetch} fetchImpl  injectable for tests
+ * @param {string} [token]  bearer token sent with every API call; the service refuses calls without one
  */
-export function createClient(baseUrl, fetchImpl = fetch) {
+export function createClient(baseUrl, fetchImpl = fetch, token = undefined) {
   const root = baseUrl.replace(/\/+$/, "");
 
   async function request(method, path, body) {
     const response = await fetchImpl(`${root}${path}`, {
       method,
-      headers: body === undefined ? { Accept: "application/json" } : { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await response.text();

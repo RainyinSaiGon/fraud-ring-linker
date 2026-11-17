@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { currentSession, onSessionChange, signOut, signOutReason, type Session } from "./auth";
 import { AccountView } from "./components/AccountView";
 import { ClusterView } from "./components/ClusterView";
 import { ProposalView } from "./components/ProposalView";
 import { ReviewQueue } from "./components/ReviewQueue";
+import { SignIn } from "./components/SignIn";
 
 export type Route =
   | { page: "queue" }
@@ -22,8 +24,23 @@ export function parseRoute(hash: string): Route {
   return { page: "queue" };
 }
 
+const ROLE_NAMES: Record<string, string> = { analyst: "Analyst", auditor: "Auditor", ingest: "Ingest" };
+
 export function App() {
   const [hash, setHash] = useState(window.location.hash);
+  const [session, setSession] = useState<Session | null>(() => currentSession());
+
+  useEffect(() => onSessionChange(() => setSession(currentSession())), []);
+
+  // Sign out when the token expires, rather than on the next refused call.
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(
+      () => signOut("Your session has ended. Sign in again."),
+      Math.max(0, Math.min(session.expiresAt - Date.now(), 2 ** 31 - 1)),
+    );
+    return () => clearTimeout(timer);
+  }, [session]);
 
   useEffect(() => {
     const onChange = () => setHash(window.location.hash);
@@ -39,12 +56,24 @@ export function App() {
           Fraud ring review
         </a>
         <span className="muted small">Synthetic data only</span>
+        {session && (
+          <span className="session small">
+            Signed in as <strong>{session.name}</strong>
+            {session.roles.length > 0 && (
+              <span className="muted"> ({session.roles.map((r) => ROLE_NAMES[r] ?? r).join(", ")})</span>
+            )}
+            <button type="button" className="link-button" onClick={() => signOut()}>
+              Sign out
+            </button>
+          </span>
+        )}
       </header>
       <main>
-        {route.page === "cluster" && <ClusterView key={route.clusterId} clusterId={route.clusterId} />}
-        {route.page === "account" && <AccountView key={route.accountId} accountId={route.accountId} />}
-        {route.page === "proposal" && <ProposalView key={route.proposalId} proposalId={route.proposalId} />}
-        {route.page === "queue" && <ReviewQueue />}
+        {!session && <SignIn notice={signOutReason() ?? undefined} />}
+        {session && route.page === "cluster" && <ClusterView key={route.clusterId} clusterId={route.clusterId} />}
+        {session && route.page === "account" && <AccountView key={route.accountId} accountId={route.accountId} />}
+        {session && route.page === "proposal" && <ProposalView key={route.proposalId} proposalId={route.proposalId} />}
+        {session && route.page === "queue" && <ReviewQueue />}
       </main>
     </>
   );
