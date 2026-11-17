@@ -18,6 +18,6 @@ export declare function mintToken(
   },
 ): string;
 
-export declare function serviceArgs(publicKeyPath: string): string[];
+export declare function serviceArgs(publicKeyPath: string, issuer?: string): string[];
 
-export declare function main(argv: string[], out?: (line: string) => void): void;
+export declare function main(argv: string[], out?: (line: string) => void): Promise<void>;

@@ -79,33 +79,40 @@ export function mintToken(privateKeyPem, options) {
   return `${signingInput}.${signature.toString("base64url")}`;
 }
 
-/** Service flags for the dev issuer and the public key in `dir`. */
-export function serviceArgs(publicKeyPath) {
+/** Service flags for an issuer (the dev one by default) and the public key at `publicKeyPath`. */
+export function serviceArgs(publicKeyPath, issuer = DEV_ISSUER) {
   return [
-    `--linker.security.issuer=${DEV_ISSUER}`,
+    `--linker.security.issuer=${issuer}`,
     `--linker.security.audience=${DEV_AUDIENCE}`,
     `--linker.security.public-key=file:${resolve(publicKeyPath).replaceAll("\\", "/")}`,
   ];
 }
 
 const USAGE = `Usage:
-  dev-auth.mjs keys <dir>
+  dev-auth.mjs keys <dir> [--issuer URL]
       Makes an RSA key pair in <dir> (kept if already there) and prints the service flags.
-  dev-auth.mjs token --keys <dir> --sub <name> --roles <role>[,<role>...] [--minutes 60]
-      Prints a signed token. Roles: ${ROLES.join(", ")}.`;
+  dev-auth.mjs token --keys <dir> --sub <name> --roles <role>[,<role>...] [--minutes 60] [--issuer URL]
+      Prints a signed token. Roles: ${ROLES.join(", ")}.
+  dev-auth.mjs issuer --keys <dir> [--port 18090]
+      Runs a local OpenID Connect provider for the analyst page's sign-in, and prints the
+      service flags that trust it. Development only: there are no passwords.`;
 
-export function main(argv, out = console.log) {
+export async function main(argv, out = console.log) {
   const [command, ...rest] = argv;
   if (command === "keys") {
-    if (rest.length !== 1) throw new Error(USAGE);
-    const { publicKey } = ensureKeys(rest[0]);
-    out(serviceArgs(publicKey).join(" "));
+    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { issuer: { type: "string" } } });
+    if (positionals.length !== 1) throw new Error(USAGE);
+    const { publicKey } = ensureKeys(positionals[0]);
+    out(serviceArgs(publicKey, values.issuer ?? DEV_ISSUER).join(" "));
     return;
   }
   if (command === "token") {
     const { values } = parseArgs({
       args: rest,
-      options: { keys: { type: "string" }, sub: { type: "string" }, roles: { type: "string" }, minutes: { type: "string" } },
+      options: {
+        keys: { type: "string" }, sub: { type: "string" }, roles: { type: "string" }, minutes: { type: "string" },
+        issuer: { type: "string" },
+      },
     });
     if (!values.keys || !values.sub || !values.roles) throw new Error(USAGE);
     const pem = readFileSync(join(values.keys, "private.pem"), "utf8");
@@ -113,17 +120,25 @@ export function main(argv, out = console.log) {
       sub: values.sub,
       roles: values.roles.split(",").map((r) => r.trim()).filter(Boolean),
       minutes: values.minutes === undefined ? 60 : Number(values.minutes),
+      issuer: values.issuer ?? DEV_ISSUER,
     }));
+    return;
+  }
+  if (command === "issuer") {
+    const { values } = parseArgs({ args: rest, options: { keys: { type: "string" }, port: { type: "string" } } });
+    if (!values.keys) throw new Error(USAGE);
+    const { startIssuer } = await import("./issuer.mjs");
+    const { issuer } = await startIssuer({ port: Number(values.port ?? 18090), keysDir: values.keys });
+    out(`Issuer running at ${issuer}. Start the service with:`);
+    out(serviceArgs(ensureKeys(values.keys).publicKey, issuer).join(" "));
     return;
   }
   throw new Error(USAGE);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    main(process.argv.slice(2));
-  } catch (error) {
+  main(process.argv.slice(2)).catch((error) => {
     console.error(error.message);
     process.exit(2);
-  }
+  });
 }

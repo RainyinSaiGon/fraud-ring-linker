@@ -1,13 +1,17 @@
 import { test as base, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { mintToken, type Role } from "../../tools/dev-auth/dev-auth.mjs";
-import { keys } from "./keys";
+import { issuer, keys } from "./keys";
 
 export function token(sub: string, roles: Role[]): string {
-  return mintToken(readFileSync(keys.privateKey, "utf8"), { sub, roles, minutes: 30 });
+  return mintToken(readFileSync(keys.privateKey, "utf8"), { sub, roles, minutes: 30, issuer });
 }
 
-/** Signs the page in as `sub` before any of its scripts run, as if a token had been pasted. */
+/**
+ * Signs the page in as `sub` before any of its scripts run, as if a token had been
+ * pasted (the end-to-end run uses a development build). sign-in.spec.ts goes
+ * through the issuer instead.
+ */
 export async function signInAs(page: Page, sub: string, roles: Role[]) {
   await page.addInitScript((value) => sessionStorage.setItem("linker.token", value), token(sub, roles));
 }

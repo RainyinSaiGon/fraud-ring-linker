@@ -7,31 +7,48 @@ Vite. It talks only to the service's REST API.
 ## Run it
 
 ```bash
-# 1. The service (no Docker needed with the h2 profile), checking tokens signed by a local key
+# 1. A local identity provider (keep it running in its own terminal)
+node ../tools/dev-auth/dev-auth.mjs issuer --keys /tmp/linker-keys
+# 2. The service (no Docker needed with the h2 profile), trusting that provider
 (cd ../java && ./gradlew :service:bootJar && java -jar service/build/libs/fraud-ring-linker-service.jar \
-  --spring.profiles.active=h2 $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys))
-# 2. Some traffic to review
+  --spring.profiles.active=h2 $(node ../tools/dev-auth/dev-auth.mjs keys /tmp/linker-keys --issuer http://localhost:18090))
+# 3. Some traffic to review
 (cd ../tools/simulator && LINKER_TOKEN=$(node ../dev-auth/dev-auth.mjs token --keys /tmp/linker-keys \
-  --sub simulator --roles ingest,analyst) npm run simulate)
-# 3. A token to sign in with, then the page at http://localhost:5173
-node ../tools/dev-auth/dev-auth.mjs token --keys /tmp/linker-keys --sub alice --roles analyst
+  --issuer http://localhost:18090 --sub simulator --roles ingest,analyst) npm run simulate)
+# 4. The page at http://localhost:5173, signing in through the local provider
 npm install
-npm run dev
+VITE_OIDC_ISSUER=http://localhost:18090 VITE_OIDC_CLIENT_ID=analyst-page npm run dev
 ```
 
 ## Signing in
 
-The page asks for a token first and sends it with every call. For now you paste
-one: from your identity provider, or from `tools/dev-auth` for a local service.
-It's kept in `sessionStorage`, so it lasts for this tab only. The top bar shows
-who is signed in and their roles, with a "Sign out" button.
+The page signs in through the bank's identity provider with OpenID Connect: the
+authorization code flow with PKCE (`src/oidc.ts`, using `oidc-client-ts`). The
+page is a public client, so there's no client secret in the browser; PKCE
+protects the code. It sends the access token with every call.
 
-- When the token expires, or the service refuses it (401), the page goes back to
-  sign-in and says the session has ended.
-- When the role can't do something (403), the page stays signed in and says
-  "Your role can't do this." The service is what enforces roles.
-- Real sign-in through the identity provider (OpenID Connect) replaces the paste
-  screen in #70.
+| Build setting | |
+|---|---|
+| `VITE_OIDC_ISSUER` | The identity provider's issuer URL (its `/.well-known/openid-configuration` is read from there) |
+| `VITE_OIDC_CLIENT_ID` | This page's client ID at the provider. Register the page's own URL as its redirect and post-logout URL. |
+| `VITE_OIDC_SCOPE` | Optional; `openid profile` by default. The access token must carry the `roles` the service checks. |
+
+- **Tokens stay in memory**, never in storage, so a reload or a new tab signs in
+  again (quickly, while the provider's own session lasts). Only the sign-in round
+  trip (state and the PKCE verifier) uses `sessionStorage`.
+- **Refresh:** the token is refreshed shortly before it expires. If that fails,
+  or the service refuses the token (401), the page goes back to sign-in and says
+  the session has ended.
+- **Sign in, then carry on:** after sign-in the page returns to the route it
+  started on, for example a cluster link someone sent.
+- **Sign out** ends the provider's session too.
+- **Roles on screen:** decision forms and "Show details" show only for analysts;
+  an auditor sees "Only analysts can decide." The service is what enforces roles;
+  a 403 says "Your role can't do this."
+- **Development builds only** also offer "paste a token" (from `tools/dev-auth`),
+  kept in `sessionStorage` for the tab. Production builds leave it out entirely:
+  `npm run check:build` fails if the built files contain it, and CI runs it.
+  A production build without the OIDC settings says sign-in isn't set up.
 
 In development, Vite forwards `/api` to `http://localhost:8080`, so the service
 needs no CORS setup. Set `API_TARGET` to point it elsewhere.
@@ -80,14 +97,17 @@ Design choices:
 ```bash
 npm test            # Vitest + Testing Library: component behaviour with a mocked API
 npm run typecheck
+npm run build && npm run check:build   # the production build has no paste-a-token sign-in
 npm run e2e         # Playwright: starts the real service and the page, then clicks through a review
 ```
 
 The end-to-end test needs the service jar (`./gradlew :service:bootJar` in
 `java/`) and a Chromium download the first time
 (`npx playwright install chromium`). It makes a key pair in the system temporary
-folder (`fraud-ring-linker-e2e-keys`), starts the service with its public half,
-and signs its own tokens: the browser signs in as an analyst or an auditor, and
-the test's API calls use the `ingest` role (`e2e/fixtures.ts`).
+folder (`fraud-ring-linker-e2e-keys`) and starts the local identity provider
+(`tools/dev-auth issuer`) on port 18090, the service trusting it, and the page
+built with its settings. `e2e/sign-in.spec.ts` signs in through the provider as
+an analyst and as an auditor. The other specs sign in with a pasted token to stay
+fast, and the test's API calls use the `ingest` role (`e2e/fixtures.ts`).
 
 Manual release checks are in [`docs/MANUAL_TEST_CHECKLIST.md`](../docs/MANUAL_TEST_CHECKLIST.md).

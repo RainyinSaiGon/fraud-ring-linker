@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiError, type DecisionResult, type Outcome } from "../api";
 import { DecidingAs } from "./DecidingAs";
+import { canDecide } from "../auth";
 
 interface Props {
   clusterId: string;
@@ -9,7 +10,19 @@ interface Props {
 }
 
 /** Records an analyst's decision. The service records the signed-in analyst as who decided. */
-export function DecisionForm({ clusterId, accountCount, onDecided }: Props) {
+export function DecisionForm(props: Props) {
+  if (!canDecide()) {
+    return (
+      <div className="card">
+        <h2>Decision</h2>
+        <p className="muted">Only analysts can decide. You can read everything here.</p>
+      </div>
+    );
+  }
+  return <DecisionFields {...props} />;
+}
+
+function DecisionFields({ clusterId, accountCount, onDecided }: Props) {
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<Outcome | null>(null);
   const [error, setError] = useState<string | null>(null);

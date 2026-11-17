@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { currentSession, onSessionChange, signOut, signOutReason, type Session } from "./auth";
+import { signOutEverywhere } from "./oidc";
 import { AccountView } from "./components/AccountView";
 import { ClusterView } from "./components/ClusterView";
 import { ProposalView } from "./components/ProposalView";
@@ -26,7 +27,7 @@ export function parseRoute(hash: string): Route {
 
 const ROLE_NAMES: Record<string, string> = { analyst: "Analyst", auditor: "Auditor", ingest: "Ingest" };
 
-export function App() {
+export function App({ signInError }: { signInError?: string | null } = {}) {
   const [hash, setHash] = useState(window.location.hash);
   const [session, setSession] = useState<Session | null>(() => currentSession());
 
@@ -62,14 +63,14 @@ export function App() {
             {session.roles.length > 0 && (
               <span className="muted"> ({session.roles.map((r) => ROLE_NAMES[r] ?? r).join(", ")})</span>
             )}
-            <button type="button" className="link-button" onClick={() => signOut()}>
+            <button type="button" className="link-button" onClick={() => void signOutEverywhere()}>
               Sign out
             </button>
           </span>
         )}
       </header>
       <main>
-        {!session && <SignIn notice={signOutReason() ?? undefined} />}
+        {!session && <SignIn notice={signOutReason() ?? signInError ?? undefined} />}
         {session && route.page === "cluster" && <ClusterView key={route.clusterId} clusterId={route.clusterId} />}
         {session && route.page === "account" && <AccountView key={route.accountId} accountId={route.accountId} />}
         {session && route.page === "proposal" && <ProposalView key={route.proposalId} proposalId={route.proposalId} />}

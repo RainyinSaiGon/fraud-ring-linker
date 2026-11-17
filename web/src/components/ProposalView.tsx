@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, type MergeAcceptResult, type MergeProposal } from "../api";
 import { dateTime, percent, ruleLabel } from "../labels";
+import { canDecide } from "../auth";
 import { DecidingAs } from "./DecidingAs";
 import { clusterName } from "./ProposalList";
 import { RiskBadge } from "./RiskBadge";
@@ -153,7 +154,19 @@ interface FormProps {
 }
 
 /** Like the cluster decision form: the service records the signed-in analyst as who decided. */
-function ProposalDecisionForm({ proposalId, onAccepted, onRejected }: FormProps) {
+function ProposalDecisionForm(props: FormProps) {
+  if (!canDecide()) {
+    return (
+      <div className="card">
+        <h2>Decision</h2>
+        <p className="muted">Only analysts can decide. You can read everything here.</p>
+      </div>
+    );
+  }
+  return <ProposalFields {...props} />;
+}
+
+function ProposalFields({ proposalId, onAccepted, onRejected }: FormProps) {
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<Choice | null>(null);
   const [error, setError] = useState<string | null>(null);

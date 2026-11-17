@@ -73,15 +73,20 @@ test("refuses a token with no subject, an unknown role or no lifetime", () => {
   assert.throws(() => mintToken(pem, { sub: "a", minutes: 0 }), /minutes/);
 });
 
-test("the command line makes keys, prints the service flags and mints tokens", () => {
+test("the command line makes keys, prints the service flags and mints tokens", async () => {
   const lines = [];
-  main(["keys", join(dir, "cli")], (line) => lines.push(line));
-  main(["token", "--keys", join(dir, "cli"), "--sub", "carol", "--roles", "ingest, auditor"], (line) => lines.push(line));
+  await main(["keys", join(dir, "cli")], (line) => lines.push(line));
+  await main(["token", "--keys", join(dir, "cli"), "--sub", "carol", "--roles", "ingest, auditor"], (line) => lines.push(line));
 
   assert.equal(lines[0], serviceArgs(join(dir, "cli", "public.pem")).join(" "));
   assert.match(lines[0], /--linker\.security\.public-key=file:.*public\.pem$/);
   assert.doesNotMatch(lines[0], /\\/);
   assert.deepEqual(decode(lines[1]).payload.roles, ["ingest", "auditor"]);
-  assert.throws(() => main(["token", "--keys", join(dir, "cli")]), /Usage/);
-  assert.throws(() => main(["what"]), /Usage/);
+  await main(["keys", join(dir, "cli"), "--issuer", "http://localhost:18090"], (line) => lines.push(line));
+  assert.match(lines[2], /--linker\.security\.issuer=http:\/\/localhost:18090 /);
+  await main(["token", "--keys", join(dir, "cli"), "--sub", "d", "--roles", "analyst", "--issuer", "http://localhost:18090"],
+    (line) => lines.push(line));
+  assert.equal(decode(lines[3]).payload.iss, "http://localhost:18090");
+  await assert.rejects(main(["token", "--keys", join(dir, "cli")]), /Usage/);
+  await assert.rejects(main(["what"]), /Usage/);
 });
