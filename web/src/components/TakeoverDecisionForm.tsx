@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiError, type TakeoverDecisionResult, type TakeoverOutcome } from "../api";
+import { DecidingAs } from "./DecidingAs";
 
 interface Props {
   accountId: string;
@@ -8,22 +9,20 @@ interface Props {
 }
 
 /**
- * Records whether someone else got into one account. Both outcomes need a name,
- * because the audit log must say who decided. Unlike a fraud decision, it never
- * covers the rest of the cluster.
+ * Records whether someone else got into one account, as the signed-in analyst.
+ * Unlike a fraud decision, it never covers the rest of the cluster.
  */
 export function TakeoverDecisionForm({ accountId, clusterSize, onDecided }: Props) {
-  const [analyst, setAnalyst] = useState("");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<TakeoverOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ready = analyst.trim() !== "" && pending === null;
+  const ready = pending === null;
 
   async function decide(outcome: TakeoverOutcome) {
     setPending(outcome);
     setError(null);
     try {
-      onDecided(await api.decideTakeover(accountId, outcome, analyst.trim(), note));
+      onDecided(await api.decideTakeover(accountId, outcome, note));
       setNote("");
     } catch (failure) {
       setError(failure instanceof ApiError ? failure.message : "The decision was not saved.");
@@ -45,15 +44,7 @@ export function TakeoverDecisionForm({ accountId, clusterSize, onDecided }: Prop
         {others > 0 && ` The ${others} other account(s) in its cluster are not affected.`} Choose “Not a takeover”
         once the customer has re-verified.
       </p>
-      <label htmlFor="takeover-analyst">Your name</label>
-      <input
-        id="takeover-analyst"
-        autoComplete="name"
-        value={analyst}
-        maxLength={128}
-        required
-        onChange={(event) => setAnalyst(event.target.value)}
-      />
+      <DecidingAs />
       <label htmlFor="takeover-note">Note (optional)</label>
       <textarea
         id="takeover-note"

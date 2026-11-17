@@ -259,8 +259,9 @@ async function problemMessage(response: Response): Promise<string> {
   return `The service answered with status ${response.status}.`;
 }
 
-function decisionBody(analyst: string, note: string): string {
-  return JSON.stringify({ analyst, note: note.trim() === "" ? null : note.trim() });
+/** Who decided comes from the token, so a body carries only the note. */
+function noteBody(note: string): string {
+  return JSON.stringify({ note: note.trim() === "" ? null : note.trim() });
 }
 
 const proposalPath = (proposalId: string) => `/api/v1/merge-proposals/${encodeURIComponent(proposalId)}`;
@@ -273,10 +274,10 @@ export const api = {
     request<Decision[]>(`/api/v1/clusters/${encodeURIComponent(clusterId)}/decisions`),
   audit: (clusterId: string, limit = 20) =>
     request<AuditEvent[]>(`/api/v1/audit-events?cluster_id=${encodeURIComponent(clusterId)}&limit=${limit}`),
-  decide: (clusterId: string, outcome: Outcome, analyst: string, note: string) =>
+  decide: (clusterId: string, outcome: Outcome, note: string) =>
     request<DecisionResult>(`/api/v1/clusters/${encodeURIComponent(clusterId)}/decisions`, {
       method: "POST",
-      body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
+      body: JSON.stringify({ outcome, note: note.trim() === "" ? null : note.trim() }),
     }),
   account: (accountId: string) => request<AccountDetail>(accountPath(accountId)),
   accountAudit: (accountId: string, limit = 20) =>
@@ -284,10 +285,10 @@ export const api = {
   takeovers: (limit = 100) => request<TakeoverSummary[]>(`/api/v1/takeovers?limit=${limit}`),
   logins: (accountId: string, limit = 30) => request<Login[]>(`${accountPath(accountId)}/logins?limit=${limit}`),
   takeoverDecisions: (accountId: string) => request<TakeoverDecision[]>(`${accountPath(accountId)}/takeover-decisions`),
-  decideTakeover: (accountId: string, outcome: TakeoverOutcome, analyst: string, note: string) =>
+  decideTakeover: (accountId: string, outcome: TakeoverOutcome, note: string) =>
     request<TakeoverDecisionResult>(`${accountPath(accountId)}/takeover-decisions`, {
       method: "POST",
-      body: JSON.stringify({ outcome, analyst, note: note.trim() === "" ? null : note.trim() }),
+      body: JSON.stringify({ outcome, note: note.trim() === "" ? null : note.trim() }),
     }),
   mules: (limit = 100) => request<MuleSummary[]>(`/api/v1/mules?limit=${limit}`),
   transfers: (accountId: string, limit = 20) =>
@@ -295,8 +296,8 @@ export const api = {
   proposals: (status: ProposalStatus = "OPEN", limit = 100) =>
     request<MergeProposal[]>(`/api/v1/merge-proposals?status=${status}&limit=${limit}`),
   proposal: (proposalId: string) => request<MergeProposal>(proposalPath(proposalId)),
-  acceptProposal: (proposalId: string, analyst: string, note: string) =>
-    request<MergeAcceptResult>(`${proposalPath(proposalId)}/accept`, { method: "POST", body: decisionBody(analyst, note) }),
-  rejectProposal: (proposalId: string, analyst: string, note: string) =>
-    request<MergeProposal>(`${proposalPath(proposalId)}/reject`, { method: "POST", body: decisionBody(analyst, note) }),
+  acceptProposal: (proposalId: string, note: string) =>
+    request<MergeAcceptResult>(`${proposalPath(proposalId)}/accept`, { method: "POST", body: noteBody(note) }),
+  rejectProposal: (proposalId: string, note: string) =>
+    request<MergeProposal>(`${proposalPath(proposalId)}/reject`, { method: "POST", body: noteBody(note) }),
 };

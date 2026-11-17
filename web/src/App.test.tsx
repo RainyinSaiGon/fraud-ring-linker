@@ -97,32 +97,30 @@ describe("cluster page", () => {
     expect(screen.getByTestId("reason")).toHaveTextContent("not reviewed yet");
   });
 
-  it("keeps both decision buttons disabled until the analyst gives a name", async () => {
+  it("decides as the signed-in analyst, with no name to type", async () => {
     const { calls } = mockFetch(routesFor());
     window.location.hash = "#/clusters/c7";
     render(<App />);
     const confirm = await screen.findByRole("button", { name: "Confirm fraud" });
 
-    expect(confirm).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Not fraud" })).toBeDisabled();
-    await userEvent.type(screen.getByLabelText("Your name"), "   ");
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
+    expect(screen.queryByLabelText("Your name")).not.toBeInTheDocument();
+    expect(screen.getByText("Deciding as").closest("p")).toHaveTextContent("Deciding as ana");
     expect(calls.some((call) => call.method === "POST")).toBe(false);
   });
 
-  it("sends the decision with the analyst's name and note, then reloads the cluster", async () => {
+  it("sends the decision and note without a name, then reloads the cluster", async () => {
     const { calls } = mockFetch(routesFor());
     window.location.hash = "#/clusters/c7";
     render(<App />);
 
-    await userEvent.type(await screen.findByLabelText("Your name"), " Ana ");
-    await userEvent.type(screen.getByLabelText("Note (optional)"), "Same card on all three");
+    await userEvent.type(await screen.findByLabelText("Note (optional)"), "Same card on all three");
     await userEvent.click(screen.getByRole("button", { name: "Confirm fraud" }));
 
     await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(1));
     const post = calls.find((call) => call.method === "POST")!;
     expect(post.url).toBe("/api/v1/clusters/c7/decisions");
-    expect(post.body).toEqual({ outcome: "CONFIRMED_FRAUD", analyst: "Ana", note: "Same card on all three" });
+    expect(post.body).toEqual({ outcome: "CONFIRMED_FRAUD", note: "Same card on all three" });
     await waitFor(() => expect(calls.filter((call) => call.url === "/api/v1/clusters/c7")).toHaveLength(2));
   });
 
@@ -135,8 +133,7 @@ describe("cluster page", () => {
     window.location.hash = "#/clusters/c7";
     render(<App />);
 
-    await userEvent.type(await screen.findByLabelText("Your name"), "Ana");
-    await userEvent.click(screen.getByRole("button", { name: "Not fraud" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Not fraud" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Cluster c7 not found.");
     expect(screen.getByRole("button", { name: "Not fraud" })).toBeEnabled();
@@ -258,24 +255,23 @@ describe("proposal page", () => {
     expect(screen.getByRole("link", { name: "See why cluster c5 is linked" })).toHaveAttribute("href", "#/clusters/c5");
   });
 
-  it("keeps both buttons disabled until the analyst gives a name", async () => {
+  it("decides as the signed-in analyst, with no name to type", async () => {
     const { calls } = mockFetch(routesFor());
     open();
     const merge = await screen.findByRole("button", { name: "Merge clusters" });
 
-    expect(merge).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Keep apart" })).toBeDisabled();
-    await userEvent.type(screen.getByLabelText("Your name"), "  ");
-    expect(merge).toBeDisabled();
+    expect(merge).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Keep apart" })).toBeEnabled();
+    expect(screen.queryByLabelText("Your name")).not.toBeInTheDocument();
+    expect(screen.getByText("Deciding as").closest("p")).toHaveTextContent("Deciding as ana");
     expect(calls.some((call) => call.method === "POST")).toBe(false);
   });
 
-  it("merges with the analyst's name and note, then shows the merged cluster", async () => {
+  it("merges with the note and no name, then shows the merged cluster", async () => {
     const { calls } = mockFetch(routesFor());
     open();
 
-    await userEvent.type(await screen.findByLabelText("Your name"), " Ana ");
-    await userEvent.type(screen.getByLabelText("Note (optional)"), "Same phone");
+    await userEvent.type(await screen.findByLabelText("Note (optional)"), "Same phone");
     await userEvent.click(screen.getByRole("button", { name: "Merge clusters" }));
 
     const result = await screen.findByTestId("merge-result");
@@ -288,22 +284,21 @@ describe("proposal page", () => {
 
     const post = calls.find((call) => call.method === "POST")!;
     expect(post.url).toBe(`${url}/accept`);
-    expect(post.body).toEqual({ analyst: "Ana", note: "Same phone" });
+    expect(post.body).toEqual({ note: "Same phone" });
   });
 
   it("keeps the clusters apart on reject", async () => {
     const { calls } = mockFetch(routesFor());
     open();
 
-    await userEvent.type(await screen.findByLabelText("Your name"), "Ana");
-    await userEvent.click(screen.getByRole("button", { name: "Keep apart" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Keep apart" }));
 
     expect(await screen.findByText(/Kept apart by Ana/)).toBeInTheDocument();
     expect(screen.getByText("This pair will not be proposed again.")).toBeInTheDocument();
     expect(screen.getByText("“Different people”")).toBeInTheDocument();
     const post = calls.find((call) => call.method === "POST")!;
     expect(post.url).toBe(`${url}/reject`);
-    expect(post.body).toEqual({ analyst: "Ana", note: null });
+    expect(post.body).toEqual({ note: null });
   });
 
   it("shows why a merge was refused and keeps the form usable", async () => {
@@ -318,8 +313,7 @@ describe("proposal page", () => {
     });
     open();
 
-    await userEvent.type(await screen.findByLabelText("Your name"), "Ana");
-    await userEvent.click(screen.getByRole("button", { name: "Merge clusters" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Merge clusters" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("verified as different people");
     expect(screen.getByRole("button", { name: "Merge clusters" })).toBeEnabled();
@@ -515,8 +509,8 @@ describe("api client", () => {
 
   it("sends an empty note as null", async () => {
     const { calls } = mockFetch({ "/api/v1/clusters/c1/decisions": () => ({ status: 201, body: decisionResult("x") }) });
-    await api.decide("c1", "NOT_FRAUD", "x", "   ");
-    expect(calls[0]!.body).toEqual({ outcome: "NOT_FRAUD", analyst: "x", note: null });
+    await api.decide("c1", "NOT_FRAUD", "   ");
+    expect(calls[0]!.body).toEqual({ outcome: "NOT_FRAUD", note: null });
   });
 });
 

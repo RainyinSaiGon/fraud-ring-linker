@@ -28,11 +28,11 @@ class TakeoverFlagger {
     }
 
     /**
-     * Caller must be inside {@link WriteThrough}.
+     * Caller must be inside {@link WriteThrough}. {@code actor} is the system whose data raised the flag.
      *
      * @return accounts flagged for the first time, ordered by ID
      */
-    List<String> recordNew(LinkerEngine.Session session, Instant now) {
+    List<String> recordNew(LinkerEngine.Session session, Instant now, String actor) {
         List<TakeoverScore> flagged = session.takeoverScores().values().stream()
                 .filter(TakeoverScore::flagged)
                 .toList();
@@ -53,7 +53,7 @@ class TakeoverFlagger {
             details.put("description", RiskAssessor.describe(score));
             details.put("reached_at", score.reachedAt().toString());
             audit.record(now, AuditRepository.TAKEOVER_FLAGGED, score.accountId(),
-                    session.state().clusterIdOf(score.accountId()).orElse(null), AuditRepository.SYSTEM, details);
+                    session.state().clusterIdOf(score.accountId()).orElse(null), actor, details);
             created.add(score.accountId());
         }
         return List.copyOf(created);

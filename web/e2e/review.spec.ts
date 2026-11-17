@@ -36,14 +36,13 @@ test("an analyst reviews a linked cluster and confirms fraud", async ({ page, re
   await expect(page.getByText("Same payment card, rarely shared").first()).toBeVisible();
 
   const confirm = page.getByRole("button", { name: "Confirm fraud" });
-  await expect(confirm).toBeDisabled();
-  await page.getByLabel("Your name").fill("E2E Analyst");
+  await expect(page.getByText("Deciding as")).toContainText("e2e-analyst");
   await page.getByLabel("Note (optional)").fill("Three accounts on one card");
   await confirm.click();
 
   await expect(page.getByText("Restrict", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("reason")).toContainText("confirmed as fraud by E2E Analyst");
-  await expect(page.getByText("E2E Analyst marked it fraud")).toBeVisible();
+  await expect(page.getByTestId("reason")).toContainText("confirmed as fraud by e2e-analyst");
+  await expect(page.getByText("e2e-analyst marked it fraud")).toBeVisible();
 
   // The decided cluster leaves the queue.
   await page.getByRole("link", { name: "← Review queue" }).click();

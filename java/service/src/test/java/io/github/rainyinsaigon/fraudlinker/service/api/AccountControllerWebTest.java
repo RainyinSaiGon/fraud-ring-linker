@@ -8,13 +8,17 @@ import io.github.rainyinsaigon.fraudlinker.service.app.NotFoundException;
 import io.github.rainyinsaigon.fraudlinker.service.engine.EngineUnavailableException;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAction;
 import io.github.rainyinsaigon.fraudlinker.service.risk.RiskAssessment;
+import io.github.rainyinsaigon.fraudlinker.service.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -32,10 +37,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * HTTP contract of the accounts endpoints: JSON shape, validation and error mapping. The service is mocked.
- * Security filters are off here; {@code SecurityApiScenarios} checks tokens and roles against the real service.
+ * Requests carry a test JWT with every role, so only the contract is under test here;
+ * {@code SecurityApiScenarios} checks tokens and roles against the real service.
  */
 @WebMvcTest(AccountController.class)
-@AutoConfigureMockMvc(addFilters = false)
+@Import(SecurityConfig.class)
 class AccountControllerWebTest {
     private static final String VALID = """
             {"account_id":"acc_1","email":"alice@example.com","device_id":null,"ip":"203.0.113.7",
@@ -48,12 +54,21 @@ class AccountControllerWebTest {
     @MockitoBean
     AccountService accounts;
 
+    /** Never called: {@link #caller()} puts the authentication in place without decoding anything. */
+    @MockitoBean
+    JwtDecoder decoder;
+
+    private static JwtRequestPostProcessor caller() {
+        return jwt().jwt(j -> j.subject("u").claim("azp", "kyc-service")).authorities(
+                new SimpleGrantedAuthority("ROLE_INGEST"), new SimpleGrantedAuthority("ROLE_ANALYST"));
+    }
+
     @Test
     void registersAndReturnsSnakeCaseBodyWithLocation() throws Exception {
-        when(accounts.register(any())).thenReturn(new AccountService.LinkResult(
+        when(accounts.register(any(), any())).thenReturn(new AccountService.LinkResult(
                 new Assignment("acc_1", "c7", 0.91), 3, new RiskAssessment(RiskAction.REVIEW, "Linked."), java.util.List.of()));
 
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "/api/v1/accounts/acc_1"))
                 .andExpect(jsonPath("$.account_id").value("acc_1"))
@@ -66,7 +81,7 @@ class AccountControllerWebTest {
 
     @Test
     void convertsTimestampOffsetToUtcAndMissingSignalsToAbsent() throws Exception {
-        when(accounts.register(any())).thenAnswer(invocation -> {
+        when(accounts.register(any(), any())).thenAnswer(invocation -> {
             Account account = invocation.getArgument(0);
             org.assertj.core.api.Assertions.assertThat(account.createdAt()).isEqualTo(Instant.parse("2026-03-14T02:22:11Z"));
             org.assertj.core.api.Assertions.assertThat(account.deviceId()).isNull();
@@ -75,7 +90,7 @@ class AccountControllerWebTest {
                     new RiskAssessment(RiskAction.ALLOW, "ok"), java.util.List.of());
         });
 
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content("""
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content("""
                         {"account_id":"acc_1","email":"a@b.com","device_id":"  ","created_at":"2026-03-14T09:22:11+07:00"}
                         """))
                 .andExpect(status().isCreated());
@@ -89,16 +104,16 @@ class AccountControllerWebTest {
             "{\"account_id\":\"acc_1\",\"email\":\"a@b.com\"}",
     })
     void rejectsInvalidBodiesWithFieldErrors(String body) throws Exception {
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid request"))
                 .andExpect(jsonPath("$.errors[0].field").exists());
-        verify(accounts, never()).register(any());
+        verify(accounts, never()).register(any(), any());
     }
 
     @Test
     void reportsFieldNamesInSnakeCase() throws Exception {
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"account_id\":\"acc_1\",\"email\":\"a@b.com\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("created_at"));
@@ -106,18 +121,18 @@ class AccountControllerWebTest {
 
     @Test
     void rejectsMalformedJsonAndBadTimestamp() throws Exception {
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content("{not json"))
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"account_id\":\"acc_1\",\"email\":\"a@b.com\",\"created_at\":\"yesterday\"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void duplicateAccountIsConflict() throws Exception {
-        when(accounts.register(any())).thenThrow(new ConflictException("Account acc_1 already exists."));
+        when(accounts.register(any(), any())).thenThrow(new ConflictException("Account acc_1 already exists."));
 
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("Account acc_1 already exists."));
     }
@@ -126,23 +141,23 @@ class AccountControllerWebTest {
     void unknownAccountIsNotFound() throws Exception {
         when(accounts.find("acc_404")).thenThrow(new NotFoundException("Account acc_404 not found."));
 
-        mvc.perform(get("/api/v1/accounts/acc_404"))
+        mvc.perform(get("/api/v1/accounts/acc_404").with(caller()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
     void invalidPathIdIsRejectedBeforeTheService() throws Exception {
-        mvc.perform(get("/api/v1/accounts/{id}", "x".repeat(200)))
+        mvc.perform(get("/api/v1/accounts/{id}", "x".repeat(200)).with(caller()))
                 .andExpect(status().isBadRequest());
         verify(accounts, never()).find(any());
     }
 
     @Test
     void unavailableEngineIs503WithoutInternalDetail() throws Exception {
-        when(accounts.register(any())).thenThrow(new EngineUnavailableException(new IllegalStateException("db password wrong")));
+        when(accounts.register(any(), any())).thenThrow(new EngineUnavailableException(new IllegalStateException("db password wrong")));
 
-        mvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(post("/api/v1/accounts").with(caller()).contentType(MediaType.APPLICATION_JSON).content(VALID))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.detail").value("Linking is temporarily unavailable. Retry later."));
     }

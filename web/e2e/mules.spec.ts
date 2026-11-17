@@ -68,7 +68,6 @@ test("an analyst sees both mules in the simulator's chain, with their signals, a
   await expect(transfers.getByRole("row", { name: new RegExp(second) }).first()).toContainText("Out");
   await expect(transfers.getByRole("row", { name: /ext_victim_/ }).first()).toContainText("In");
 
-  await page.getByLabel("Your name").fill("E2E Analyst");
   await page.getByRole("button", { name: "Confirm fraud" }).click();
   await expect(page.getByText("Restrict", { exact: true })).toBeVisible();
   await expect(page.getByText(new RegExp(`${first} flagged as a likely mule`))).toBeVisible();

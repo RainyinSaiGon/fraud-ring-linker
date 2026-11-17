@@ -49,13 +49,18 @@ public final class TestTokens {
 
     /**
      * Every request sends a token with all three roles unless a test sets its own
-     * {@code Authorization} header, which then replaces it.
+     * {@code Authorization} header, which then replaces it. The token names analyst
+     * {@code analyst-<run>} and client {@code ingest-<run>}, so each test can tell its
+     * own audit events apart.
      */
-    public static void sendByDefault() {
+    public static void sendByDefault(String run) {
         RestAssured.config = RestAssured.config().headerConfig(HeaderConfig.headerConfig()
                 .overwriteHeadersWithName("Authorization", "Content-Type", "Accept"));
         RestAssured.requestSpecification = new RequestSpecBuilder()
-                .addHeader("Authorization", bearer(token("test-user", "ingest", "analyst", "auditor")))
+                .addHeader("Authorization", bearer(token("user-" + run, claims -> claims
+                        .claim("preferred_username", "analyst-" + run)
+                        .claim("azp", "ingest-" + run)
+                        .claim("roles", List.of("ingest", "analyst", "auditor")))))
                 .build();
     }
 

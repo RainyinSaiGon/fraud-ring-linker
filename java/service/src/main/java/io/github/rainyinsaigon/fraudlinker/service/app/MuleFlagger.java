@@ -29,11 +29,11 @@ class MuleFlagger {
     }
 
     /**
-     * Caller must be inside {@link WriteThrough}.
+     * Caller must be inside {@link WriteThrough}. {@code actor} is the system whose data raised the flag.
      *
      * @return accounts flagged for the first time, ordered by ID
      */
-    List<String> recordNew(LinkerEngine.Session session, Instant now) {
+    List<String> recordNew(LinkerEngine.Session session, Instant now, String actor) {
         List<MuleScore> flagged = session.muleScores().values().stream().filter(MuleScore::flagged).toList();
         if (flagged.isEmpty()) {
             return List.of();
@@ -51,7 +51,7 @@ class MuleFlagger {
             details.put("reasons", score.reasons().stream().map(MuleReason::code).toList());
             details.put("description", RiskAssessor.describe(score));
             audit.record(now, AuditRepository.MULE_FLAGGED, score.accountId(),
-                    session.state().clusterIdOf(score.accountId()).orElse(null), AuditRepository.SYSTEM, details);
+                    session.state().clusterIdOf(score.accountId()).orElse(null), actor, details);
             created.add(score.accountId());
         }
         return List.copyOf(created);

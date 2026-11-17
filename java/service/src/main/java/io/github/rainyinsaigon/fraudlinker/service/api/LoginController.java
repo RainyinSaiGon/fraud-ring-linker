@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.LoginBatchRequest;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.LoginBatchResponse;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.LoginResponse;
@@ -16,6 +17,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,9 +47,10 @@ public class LoginController {
     /** Stores a batch of logins, all or nothing, and rescores the accounts involved. */
     @PostMapping("/api/v1/logins")
     @ResponseStatus(HttpStatus.CREATED)
-    public LoginBatchResponse record(@Valid @RequestBody LoginBatchRequest request) {
+    public LoginBatchResponse record(@Valid @RequestBody LoginBatchRequest request,
+                                     @AuthenticationPrincipal Jwt jwt) {
         List<Login> batch = request.logins().stream().map(ApiModels.LoginRequest::toLogin).toList();
-        LoginService.RecordResult result = logins.record(batch);
+        LoginService.RecordResult result = logins.record(batch, Caller.client(jwt));
         return new LoginBatchResponse(result.accepted(), result.flaggedNow(),
                 result.scores().stream().map(TakeoverScoreResponse::of).toList());
     }
@@ -74,8 +78,9 @@ public class LoginController {
     @ResponseStatus(HttpStatus.CREATED)
     public TakeoverDecisionResultResponse decide(
             @PathVariable @Pattern(regexp = ApiModels.ACCOUNT_ID_PATTERN) String accountId,
-            @Valid @RequestBody TakeoverDecisionRequest request) {
-        LoginService.DecisionResult result = logins.decide(accountId, request.outcome(), request.analyst().strip(),
+            @Valid @RequestBody TakeoverDecisionRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        LoginService.DecisionResult result = logins.decide(accountId, request.outcome(), Caller.person(jwt),
                 request.note());
         return new TakeoverDecisionResultResponse(TakeoverDecisionResponse.of(result.decision()),
                 result.risk().action(), result.risk().reason());

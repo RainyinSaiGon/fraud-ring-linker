@@ -19,6 +19,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Null;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -219,8 +220,8 @@ public final class ApiModels {
 
     public record TakeoverDecisionRequest(
             @NotNull TakeoverOutcome outcome,
-            @NotBlank @Size(max = 128) String analyst,
-            @Size(max = 2000) String note) {
+            @Size(max = 2000) String note,
+            @Null(message = "comes from your sign-in; remove it from the request") Object analyst) {
     }
 
     public record TakeoverDecisionResponse(UUID decisionId, String accountId, TakeoverOutcome outcome,
@@ -258,8 +259,8 @@ public final class ApiModels {
 
     public record DecisionRequest(
             @NotNull Outcome outcome,
-            @NotBlank @Size(max = 128) String analyst,
-            @Size(max = 2000) String note) {
+            @Size(max = 2000) String note,
+            @Null(message = "comes from your sign-in; remove it from the request") Object analyst) {
     }
 
     public record DecisionResponse(
@@ -283,15 +284,15 @@ public final class ApiModels {
     public record ConstraintRequest(
             @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String accountA,
             @NotBlank @Pattern(regexp = ACCOUNT_ID_PATTERN) String accountB,
-            @NotBlank @Size(max = 128) String actor) {
+            @Null(message = "comes from your sign-in; remove it from the request") Object actor) {
     }
 
     public record ConstraintResponse(String accountA, String accountB, String relation, String status) {
     }
 
     public record MergeDecisionRequest(
-            @NotBlank @Size(max = 128) String analyst,
-            @Size(max = 2000) String note) {
+            @Size(max = 2000) String note,
+            @Null(message = "comes from your sign-in; remove it from the request") Object analyst) {
     }
 
     /**

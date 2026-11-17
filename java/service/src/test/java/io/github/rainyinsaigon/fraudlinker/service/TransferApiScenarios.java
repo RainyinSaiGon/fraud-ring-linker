@@ -103,7 +103,8 @@ abstract class TransferApiScenarios extends ApiScenarios {
         given().queryParam("account_id", m1).get("/api/v1/audit-events").then()
                 .body("find { it.event_type == 'mule.flagged' }.details.reasons", contains("fan_in", "pass_through",
                         "chain"))
-                .body("find { it.event_type == 'mule.flagged' }.actor", equalTo("system"));
+                // The flag was raised by the client whose transfers showed it.
+                .body("find { it.event_type == 'mule.flagged' }.actor", equalTo("ingest-" + run));
     }
 
     @Test

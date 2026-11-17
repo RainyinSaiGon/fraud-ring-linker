@@ -75,11 +75,10 @@ test("an analyst sees the simulator's phished customer, confirms the takeover, a
   await expect(logins.getByText(/^Impossible jump: /)).toBeVisible();
   await expect(page.getByText("The 1 other account(s) in its cluster are not affected.", { exact: false })).toBeVisible();
 
-  await page.getByLabel("Your name").fill("E2E Analyst");
   await page.getByRole("button", { name: "Confirm takeover" }).click();
   await expect(page.locator(".section-head").getByText("Step up", { exact: true })).toBeVisible();
   await expect(page.getByTestId("reason")).toContainText("re-verify the customer");
-  await expect(page.getByText(`E2E Analyst marked ${victim} taken over`)).toBeVisible();
+  await expect(page.getByText(`e2e-analyst marked ${victim} taken over`)).toBeVisible();
 
   // The other account in the cluster keeps its own action.
   await page.getByRole("link", { name: /^c\d+$/ }).click();

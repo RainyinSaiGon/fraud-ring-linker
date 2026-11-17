@@ -47,7 +47,6 @@ test("an auditor can read a cluster but the service refuses their decision", asy
 
   await page.goto(`/#/clusters/${clusterId}`);
   await expect(page.getByRole("heading", { name: `Cluster ${clusterId}` })).toBeVisible();
-  await page.getByLabel("Your name").fill("E2E Auditor");
   await page.getByRole("button", { name: "Confirm fraud" }).click();
 
   await expect(page.getByRole("alert")).toHaveText("Your role can't do this.");

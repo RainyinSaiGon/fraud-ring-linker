@@ -1,5 +1,6 @@
 package io.github.rainyinsaigon.fraudlinker.service.api;
 
+import io.github.rainyinsaigon.fraudlinker.service.security.Caller;
 import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.AccountLinkResponse;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.AccountRequest;
@@ -8,6 +9,8 @@ import io.github.rainyinsaigon.fraudlinker.service.app.AccountService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,8 +33,9 @@ public class AccountController {
 
     /** Registers a new account and returns its cluster and recommended action. */
     @PostMapping
-    public ResponseEntity<AccountLinkResponse> register(@Valid @RequestBody AccountRequest request) {
-        AccountService.LinkResult result = accounts.register(request.toAccount());
+    public ResponseEntity<AccountLinkResponse> register(@Valid @RequestBody AccountRequest request,
+                                                        @AuthenticationPrincipal Jwt jwt) {
+        AccountService.LinkResult result = accounts.register(request.toAccount(), Caller.client(jwt));
         AccountLinkResponse body = new AccountLinkResponse(
                 result.assignment().accountId(),
                 result.assignment().clusterId(),

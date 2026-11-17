@@ -74,7 +74,7 @@ public class LoginService {
      *
      * @throws ConflictException if a login ID repeats within the batch or is already stored
      */
-    public RecordResult record(List<Login> batch) {
+    public RecordResult record(List<Login> batch, String client) {
         Set<String> ids = new HashSet<>();
         for (Login login : batch) {
             if (!ids.add(login.loginId())) {
@@ -93,7 +93,7 @@ public class LoginService {
                 session.addLogin(login);
                 touched.add(login.accountId());
             }
-            List<String> flaggedNow = flagger.recordNew(session, now);
+            List<String> flaggedNow = flagger.recordNew(session, now, client);
             Map<String, TakeoverScore> scores = session.takeoverScores();
             List<TakeoverScore> touchedScores = touched.stream().map(scores::get).filter(Objects::nonNull).toList();
             return new RecordResult(batch.size(), flaggedNow, touchedScores);

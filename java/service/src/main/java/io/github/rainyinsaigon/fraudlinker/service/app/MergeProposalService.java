@@ -61,7 +61,8 @@ public class MergeProposalService {
      *
      * @return the proposals created
      */
-    List<MergeProposal> propose(LinkState state, Assignment assignment, List<MergeCandidate> candidates, Instant now) {
+    List<MergeProposal> propose(LinkState state, Assignment assignment, List<MergeCandidate> candidates, Instant now,
+                                String actor) {
         if (candidates.isEmpty()) {
             return List.of();
         }
@@ -84,7 +85,7 @@ public class MergeProposalService {
             details.put("score", candidate.score());
             details.put("rule", candidate.rule());
             audit.record(now, AuditRepository.MERGE_PROPOSED, assignment.accountId(), assignment.clusterId(),
-                    AuditRepository.SYSTEM, details);
+                    actor, details);
             created.add(proposal);
         }
         return created;
