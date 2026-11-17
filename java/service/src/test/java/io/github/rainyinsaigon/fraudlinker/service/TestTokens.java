@@ -61,6 +61,7 @@ public final class TestTokens {
                         .claim("preferred_username", "analyst-" + run)
                         .claim("azp", "ingest-" + run)
                         .claim("roles", List.of("ingest", "analyst", "auditor")))))
+                .addFilter(PiiScan.INSTANCE)
                 .build();
     }
 

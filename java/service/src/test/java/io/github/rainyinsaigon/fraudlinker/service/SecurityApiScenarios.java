@@ -47,6 +47,7 @@ abstract class SecurityApiScenarios extends LoginApiScenarios {
             new Endpoint("POST", "/api/v1/merge-proposals/999999/accept", ANALYST),
             new Endpoint("POST", "/api/v1/merge-proposals/999999/reject", ANALYST),
             new Endpoint("POST", "/api/v1/accounts/nobody/takeover-decisions", ANALYST),
+            new Endpoint("POST", "/api/v1/accounts/nobody/reveal", ANALYST),
             new Endpoint("GET", "/api/v1/accounts/nobody", READERS),
             new Endpoint("GET", "/api/v1/accounts/nobody/logins", READERS),
             new Endpoint("GET", "/api/v1/accounts/nobody/takeover-decisions", READERS),

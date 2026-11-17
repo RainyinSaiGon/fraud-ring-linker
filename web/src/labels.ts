@@ -78,6 +78,10 @@ export function describeEvent(event: AuditEvent): string {
       return `${event.actor} marked ${event.account_id} ${
         event.details.outcome === "CONFIRMED_TAKEOVER" ? "taken over" : "not a takeover"
       }`;
+    case "pii.revealed":
+      return `${event.actor} showed ${event.account_id}'s contact details${
+        typeof event.details.reason === "string" ? `: ${event.details.reason}` : ""
+      }`;
     default:
       return `${event.event_type} by ${event.actor}`;
   }

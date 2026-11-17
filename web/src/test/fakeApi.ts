@@ -171,9 +171,9 @@ export const takeoverReasons = (): TakeoverReason[] => [
 
 export const accountDetail = (overrides: Partial<AccountDetail> = {}): AccountDetail => ({
   account_id: "acc_1",
-  email: "acc.1@example.com",
+  email: "a***@example.com",
   device_id: "dev_own",
-  ip: "10.0.0.1",
+  ip: "10.0.0.x",
   payment_fingerprint: "card_1",
   created_at: "2026-11-01T09:00:00Z",
   cluster_id: "c7",

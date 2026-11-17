@@ -471,3 +471,8 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   word-break: break-all;
 }
+
+.facts.compact {
+  gap: 16px;
+  margin-bottom: 10px;
+}

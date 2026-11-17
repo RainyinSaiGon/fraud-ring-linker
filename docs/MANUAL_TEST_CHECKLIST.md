@@ -26,6 +26,7 @@ browsers, layout, keyboard use, and behaviour over time.
 | M10 | Use the page with the keyboard only | Every link and button can be reached and used; focus is always visible |
 | M11 | Shrink the window to phone width | Nothing scrolls sideways; the decision form stays usable |
 | M12 | Switch the system to dark mode | Text and badges stay readable |
+| M13 | Open an account and press "Show details" | The full email and IP appear; the history shows who showed them; reloading masks them again. Signed in as an auditor, there's no button |
 
 ## Exploratory charters (30 minutes each)
 

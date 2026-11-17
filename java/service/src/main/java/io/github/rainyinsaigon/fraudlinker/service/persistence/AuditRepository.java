@@ -25,6 +25,7 @@ public class AuditRepository {
     public static final String MULE_FLAGGED = "mule.flagged";
     public static final String TAKEOVER_FLAGGED = "takeover.flagged";
     public static final String TAKEOVER_DECIDED = "takeover.decided";
+    public static final String PII_REVEALED = "pii.revealed";
 
     private final JdbcClient jdbc;
     private final JsonMapper json;

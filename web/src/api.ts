@@ -79,7 +79,10 @@ export interface TakeoverReason {
   at: string;
 }
 
-/** One account as the service sees it, with its own action (including takeover rules). */
+/**
+ * One account as the service sees it, with its own action (including takeover rules).
+ * `email` and `ip` are masked; `api.reveal` returns the full values.
+ */
 export interface AccountDetail {
   account_id: string;
   email: string;
@@ -207,6 +210,13 @@ export interface MergeAcceptResult {
 }
 
 /** An error the page can show as-is: the service's own message, or a plain explanation. */
+/** An account's full details. Every other response masks the email and IP. */
+export interface RevealResult {
+  account_id: string;
+  email: string;
+  ip: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -280,6 +290,12 @@ export const api = {
       body: JSON.stringify({ outcome, note: note.trim() === "" ? null : note.trim() }),
     }),
   account: (accountId: string) => request<AccountDetail>(accountPath(accountId)),
+  /** The full email and sign-up IP. The service records every reveal in the history. */
+  reveal: (accountId: string, reason: string) =>
+    request<RevealResult>(`${accountPath(accountId)}/reveal`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason.trim() === "" ? null : reason.trim() }),
+    }),
   accountAudit: (accountId: string, limit = 20) =>
     request<AuditEvent[]>(`/api/v1/audit-events?account_id=${encodeURIComponent(accountId)}&limit=${limit}`),
   takeovers: (limit = 100) => request<TakeoverSummary[]>(`/api/v1/takeovers?limit=${limit}`),

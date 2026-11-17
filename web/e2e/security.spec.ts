@@ -64,3 +64,42 @@ test("the service refuses calls with no token or the wrong role", async ({ playw
   await anonymous.dispose();
   await auditor.dispose();
 });
+
+test("contact details are masked; an analyst reveals one account and the history records it", async ({
+  browser,
+  page,
+  request,
+}) => {
+  const run = Date.now().toString(36);
+  const accountId = `e2e_${run}_pii`;
+  const email = `jane.${run}@example.com`;
+  const ip = `10.254.${Math.floor(Math.random() * 250)}.77`;
+  const response = await request.post(`${service}/api/v1/accounts`, {
+    data: { account_id: accountId, email, device_id: null, ip, payment_fingerprint: null, created_at: "2026-11-01T09:00:00Z" },
+  });
+  expect(response.status()).toBe(201);
+
+  // An auditor sees the masked values and no way to reveal them.
+  const auditorContext = await browser.newContext();
+  const auditor = await auditorContext.newPage();
+  await signInAs(auditor, "e2e-auditor", ["auditor"]);
+  await auditor.goto(`/#/accounts/${accountId}`);
+  await expect(auditor.getByTestId("contact-email")).toHaveText("j***@example.com");
+  await expect(auditor.getByTestId("contact-ip")).toHaveText(ip.replace(/\.\d+$/, ".x"));
+  await expect(auditor.getByRole("button", { name: "Show details" })).toHaveCount(0);
+  await expect(auditor.getByText(email)).toHaveCount(0);
+  await auditorContext.close();
+
+  // The analyst reveals them, with a reason, and the history says so.
+  await page.goto(`/#/accounts/${accountId}`);
+  await expect(page.getByTestId("contact-email")).toHaveText("j***@example.com");
+  await page.getByLabel("Reason (optional)").fill("Customer called to confirm");
+  await page.getByRole("button", { name: "Show details" }).click();
+  await expect(page.getByTestId("contact-email")).toHaveText(email);
+  await expect(page.getByTestId("contact-ip")).toHaveText(ip);
+  await expect(page.getByText(`e2e-analyst showed ${accountId}'s contact details: Customer called to confirm`)).toBeVisible();
+
+  // Reloading masks them again.
+  await page.reload();
+  await expect(page.getByTestId("contact-email")).toHaveText("j***@example.com");
+});
