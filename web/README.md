@@ -42,10 +42,15 @@ needs no CORS setup. Set `API_TARGET` to point it elsewhere.
 |---|---|
 | `#/` | **Review queue:** linked clusters still marked REVIEW, largest first; then accounts that may have been taken over ("Possible takeovers"); then likely mules waiting for a decision ("Possible mules"); then open merge proposals ("Possible split rings") |
 | `#/clusters/c12` | **Cluster:** members, each link's rule and shared signals in plain words, the recommended action and why, the decision form, the history, and each member's money movement: mule score, signals in plain words, and recent transfers on request |
-| `#/accounts/<id>` | **Account:** its own action and why, its takeover score and signals in plain words, recent logins (time, device, place, result) with each signal named next to the login that showed it, the takeover decision form, and the account's history. Account IDs on the cluster page link here |
+| `#/accounts/<id>` | **Account:** its own action and why, its takeover score and signals in plain words, recent logins (time, device, place, result) with each signal named next to the login that showed it, its contact details (masked; an analyst can show them, and the history records it), the takeover decision form, and the account's history. Account IDs on the cluster page link here |
 | `#/proposals/<id>` | **Merge proposal:** the accounts on each side, the new account and rule that link them, and Merge clusters / Keep apart |
 
 Design choices:
+- **Customer details stay masked.** The service masks every email and IP. On the
+  account page an analyst can press "Show details" (with an optional reason) to
+  see one account's full email and sign-up IP; the service records it, and the
+  history shows it. Leaving or reloading the page masks them again. Auditors
+  see no button.
 - **Decisions record the signed-in analyst.** There's no name to type: each form
   says "Deciding as …", and the service takes the name from the token, so the
   audit log can't be told someone else decided.

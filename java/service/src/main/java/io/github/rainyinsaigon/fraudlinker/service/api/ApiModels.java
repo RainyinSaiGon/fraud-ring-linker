@@ -74,6 +74,15 @@ public final class ApiModels {
             List<UUID> mergeProposalIds) {
     }
 
+    /** Why the analyst needs the full details; optional, and kept in the audit log. */
+    public record RevealRequest(@Size(max = 500) String reason) {
+    }
+
+    /** An account's full email and sign-up IP. Every other response masks them. */
+    public record RevealResponse(String accountId, String email, String ip) {
+    }
+
+    /** {@code email} and {@code ip} are masked ({@link Pii}); an analyst can reveal them. */
     public record AccountResponse(
             String accountId,
             String email,
@@ -207,7 +216,7 @@ public final class ApiModels {
     public record LoginResponse(String loginId, String accountId, String deviceId, String ip, boolean success,
                                 Instant occurredAt, Double latitude, Double longitude) {
         static LoginResponse of(Login login) {
-            return new LoginResponse(login.loginId(), login.accountId(), login.deviceId(), login.ip(),
+            return new LoginResponse(login.loginId(), login.accountId(), login.deviceId(), Pii.ip(login.ip()),
                     login.success(), login.occurredAt(), login.latitude(), login.longitude());
         }
     }

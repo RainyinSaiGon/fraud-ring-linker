@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type AccountDetail, type AuditEvent, type Login, type TakeoverReason } from "../api";
 import { dateTime, describeEvent, percent, place, takeoverMark } from "../labels";
+import { ContactDetails } from "./ContactDetails";
 import { RiskBadge } from "./RiskBadge";
 import { TakeoverDecisionForm } from "./TakeoverDecisionForm";
 
@@ -115,6 +116,14 @@ export function AccountView({ accountId }: { accountId: string }) {
         </div>
 
         <div className="side">
+          <ContactDetails
+            accountId={account.account_id}
+            email={account.email}
+            ip={account.ip}
+            onRevealed={() => void api.accountAudit(accountId).then((audit) =>
+              setState((s) => (s.status === "ready" ? { status: "ready", data: { ...s.data, audit } } : s)),
+            )}
+          />
           <TakeoverDecisionForm
             accountId={account.account_id}
             clusterSize={account.cluster_size}

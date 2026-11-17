@@ -45,7 +45,7 @@ import java.util.Set;
  *
  * <ul>
  *   <li>{@code ingest}: register accounts, constraints, transfers and logins; nothing else</li>
- *   <li>{@code analyst}: read everything and make decisions</li>
+ *   <li>{@code analyst}: read everything, make decisions and reveal an account's full details</li>
  *   <li>{@code auditor}: read everything; no decisions</li>
  * </ul>
  *
@@ -83,7 +83,7 @@ public class SecurityConfig {
                                 "/api/v1/transfers", "/api/v1/logins").hasRole(INGEST)
                         .requestMatchers(HttpMethod.POST, "/api/v1/clusters/*/decisions",
                                 "/api/v1/merge-proposals/*/accept", "/api/v1/merge-proposals/*/reject",
-                                "/api/v1/accounts/*/takeover-decisions").hasRole(ANALYST)
+                                "/api/v1/accounts/*/takeover-decisions", "/api/v1/accounts/*/reveal").hasRole(ANALYST)
                         .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole(ANALYST, AUDITOR)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(server -> server

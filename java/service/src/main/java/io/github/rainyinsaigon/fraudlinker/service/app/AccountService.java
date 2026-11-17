@@ -95,6 +95,29 @@ public class AccountService {
         });
     }
 
+    /**
+     * The account with its full details, after recording a {@code pii.revealed}
+     * audit event. The event and the reveal succeed or fail together.
+     *
+     * @throws NotFoundException if the account is unknown
+     */
+    public Account reveal(String accountId, String analyst, String reason) {
+        return writeThrough.execute(session -> {
+            String clusterId = session.state().clusterIdOf(accountId)
+                    .orElseThrow(() -> new NotFoundException("Account " + accountId + " not found."));
+            Account account = accounts.findById(accountId)
+                    .orElseThrow(() -> new NotFoundException("Account " + accountId + " not found."));
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("fields", List.of("email", "ip"));
+            String why = reason == null || reason.isBlank() ? null : reason.strip();
+            if (why != null) {
+                details.put("reason", why);
+            }
+            audit.record(clock.instant(), AuditRepository.PII_REVEALED, accountId, clusterId, analyst, details);
+            return account;
+        });
+    }
+
     /** @throws NotFoundException if the account is unknown */
     public AccountView find(String accountId) {
         return engine.withLock(session -> {

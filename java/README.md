@@ -78,6 +78,23 @@ gets a 403. Both are problem responses that don't say which check failed.
 so a new endpoint is closed until someone adds it to `SecurityConfig` (a test
 fails if they don't).
 
+### Customer details
+
+Emails and IPs are masked in every response, for every role: `jane.doe@example.com`
+becomes `j***@example.com`, `203.0.113.7` becomes `203.0.113.x`, and an IPv6
+address keeps its first three groups. Linking and storage use the full values;
+only what leaves the service is masked. Link explanations name the matching
+signal (`same_email`, `same_ip_subnet`) without printing it. Two equal masks
+don't prove two equal values; the explanations say what really matches.
+
+An analyst who needs the full details calls `POST /api/v1/accounts/{id}/reveal`
+for one account. Each reveal is a `pii.revealed` audit event with who asked and
+why, so auditors can see every one. Auditors and ingest clients can't reveal.
+
+The scenario tests check this everywhere. They remember every email and IP they
+send, and any response other than a reveal that contains one fails the test
+(`PiiScan`).
+
 ### Who acted
 
 Who acted always comes from the token, never the request body:
@@ -111,7 +128,8 @@ validation).
 | Method and path | What it does |
 |---|---|
 | `POST /api/v1/accounts` | Register a new account. Returns its cluster, confidence, **risk action**, and the IDs of any merge proposals it opened. 201, or 409 if the ID exists. |
-| `GET /api/v1/accounts/{id}` | The account, its cluster, its own risk action (including takeover rules), and its mule and takeover scores and reasons. |
+| `GET /api/v1/accounts/{id}` | The account (email and IP masked), its cluster, its own risk action (including takeover rules), and its mule and takeover scores and reasons. |
+| `POST /api/v1/accounts/{id}/reveal` | Analysts only. `{"reason":"..."}` (optional, up to 500 characters): the account's full email and sign-up IP. Records a `pii.revealed` audit event with who, when and the reason. |
 | `GET /api/v1/clusters?limit=` | Review queue: clusters with 2+ accounts still marked REVIEW, largest first. |
 | `GET /api/v1/clusters/{id}` | Members, risk action, latest decision, which pairs are linked by which rule and shared signals, and members' mule scores. |
 | `POST /api/v1/clusters/{id}/decisions` | Analyst decision: `{"outcome":"CONFIRMED_FRAUD"\|"NOT_FRAUD","note":"..."}`. Covers every current member. |
@@ -126,7 +144,7 @@ validation).
 | `GET /api/v1/accounts/{id}/transfers?limit=` | Money into and out of an account, newest first, with `direction` `IN` or `OUT`. |
 | `POST /api/v1/logins` | `{"logins":[{"login_id","account_id","device_id","ip","success","occurred_at","latitude","longitude"}]}`, 1 to 500, stored all or nothing. The location is optional, but both coordinates or neither. Returns the accounts flagged for the first time and the touched accounts' takeover scores. 201, or 409 for a repeated `login_id`. |
 | `GET /api/v1/takeovers?limit=` | Possible takeovers no analyst has decided on since they were flagged, highest score first, with when the score was reached. |
-| `GET /api/v1/accounts/{id}/logins?limit=` | An account's logins, newest first. |
+| `GET /api/v1/accounts/{id}/logins?limit=` | An account's logins, newest first, with each IP masked. |
 | `POST /api/v1/accounts/{id}/takeover-decisions` | `{"outcome":"CONFIRMED_TAKEOVER"\|"NOT_TAKEOVER","note":"..."}`. Covers this account only, never the rest of its cluster. |
 | `GET /api/v1/accounts/{id}/takeover-decisions?limit=` | The account's takeover decisions, newest first. |
 | `GET /api/v1/audit-events?account_id=&cluster_id=&limit=` | Audit trail, newest first. |
@@ -232,6 +250,5 @@ a re-verified customer is recorded, and ends it.
 
 ### Not built yet
 
-- PII handling. Responses include raw emails and IPs; mask them per role.
 - Pagination beyond `limit`.
 - Horizontal scaling. State is per instance, so run a single writer.

@@ -5,6 +5,8 @@ import io.github.rainyinsaigon.fraudlinker.domain.Account;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.AccountLinkResponse;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.AccountRequest;
 import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.AccountResponse;
+import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.RevealRequest;
+import io.github.rainyinsaigon.fraudlinker.service.api.ApiModels.RevealResponse;
 import io.github.rainyinsaigon.fraudlinker.service.app.AccountService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -48,11 +50,24 @@ public class AccountController {
                 .body(body);
     }
 
+    /**
+     * The account's full email and sign-up IP, for an analyst who needs them. Every
+     * reveal is recorded in the audit log with who asked and why.
+     */
+    @PostMapping("/{accountId}/reveal")
+    public RevealResponse reveal(@PathVariable @Pattern(regexp = ApiModels.ACCOUNT_ID_PATTERN) String accountId,
+                                 @Valid @RequestBody(required = false) RevealRequest request,
+                                 @AuthenticationPrincipal Jwt jwt) {
+        Account account = accounts.reveal(accountId, Caller.person(jwt), request == null ? null : request.reason());
+        return new RevealResponse(account.accountId(), account.email(), account.ip());
+    }
+
     @GetMapping("/{accountId}")
     public AccountResponse find(@PathVariable @Pattern(regexp = ApiModels.ACCOUNT_ID_PATTERN) String accountId) {
         AccountService.AccountView view = accounts.find(accountId);
         Account account = view.account();
-        return new AccountResponse(account.accountId(), account.email(), account.deviceId(), account.ip(),
+        return new AccountResponse(account.accountId(), Pii.email(account.email()), account.deviceId(),
+                Pii.ip(account.ip()),
                 account.paymentFingerprint(), account.createdAt(), view.clusterId(), view.clusterSize(),
                 view.risk().action(), view.risk().reason(),
                 view.muleScore() == null ? 0 : view.muleScore().score(),
